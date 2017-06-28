@@ -6,6 +6,14 @@ import numpy as np
 import pylab
 
 def f(lambda_):
+    a1 = 0.475
+    a2 = 0.619
+    b1 = 1.5
+    b2 = 1.5
+    k1 = 2.22
+    k2 = 2.22
+    
+
     e11 = 0.5 * (lambda_**2 - 1)
     e22 = 0.5 * (1/lambda_ - 1)
     T_p = k1 * e11/(a1 - e11)**(b1) * (2 + (b1*e11)/(a1 - e11))
@@ -16,7 +24,7 @@ def f(lambda_):
 
 T = 300
 N = 300
-dt = T/N
+dt = 1.*T/N
 step = 10
 
 global_time = np.linspace(0, T, N+1)
@@ -35,8 +43,13 @@ q2_index = 2#niederer.monitor_indices("Tenssion")
 q3_index =  3#niederer.monitor_indices("Tenssion")
 trpn_index = 4 #niederer.monitor_indices("Tenssion")
 
-for i, t in enumerate(global_time):
+l_list = []
+Ta_list = []
+t_list = []
+
+for i, t in enumerate(global_time[0:N]):
     t_local = np.linspace(t, global_time[i+1], step+1)
+    print 't = ',t
     p = (niederer.init_parameter_values(lambda_=lambda_prev, dExtensionRatiodt=dldt),)
     init = niederer.init_state_values(z=z_prev, Q_1=Q_1_prev, Q_2=Q_2_prev,
                                       Q_3=Q_3_prev, TRPN=TRPN_prev)
@@ -54,25 +67,36 @@ for i, t in enumerate(global_time):
     lambda_ = fsolve(f, lambda_prev)
     dldt = (lambda_ - lambda_prev) / dt
     lambda_prev = lambda_
+    
+    l_list.append(lambda_)
+    Ta_list.append(T_a)
+    t_list.append(t_local[-1])
 
-
-t = np.linspace(0,100,101)
-
-lm_ = np.linspace(0,10,11)
-force_index = niederer.monitor_indices("Ca_i")
-
-init = niederer.init_state_values()
-p = (niederer.init_parameter_values(),)
-s = odeint(niederer.rhs, init, t, p)
-Ca_i = []
-for t_ in t:
-    m = niederer.monitor(s[-1], t_, p[0])
-    Ca_i.append(m[force_index])
-
-pylab.plot(t, Ca_i)
-#pylab.semilogx(lm_, Fss)
-
+pylab.figure(0)
+pylab.plot(l_list,Ta_list)
+pylab.figure(1)
+pylab.plot(t_list,Ta_list,label='Ta')
+pylab.figure(2)
+pylab.plot(t_list,l_list,label='lambda')
 pylab.show()
+
+#t = np.linspace(0,100,101)
+#
+#lm_ = np.linspace(0,10,11)
+#force_index = niederer.monitor_indices("Ca_i")
+#
+#init = niederer.init_state_values()
+#p = (niederer.init_parameter_values(),)
+#s = odeint(niederer.rhs, init, t, p)
+#Ca_i = []
+#for t_ in t:
+#    m = niederer.monitor(s[-1], t_, p[0])
+#    Ca_i.append(m[force_index])
+#
+#pylab.plot(t, Ca_i)
+##pylab.semilogx(lm_, Fss)
+#
+#pylab.show()
 
 
 #Fmax = 0.17
