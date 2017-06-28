@@ -45,15 +45,20 @@ parameters("Troponin",
 states("Intracellular ion concentrations",
        TRPN = ScalarParam(0.067593139865, unit="mmole*l**-1"))
 
+parameters("Input from the mech. model",
+	   lambda_=1,
+           dExtensionRatiodt=0)
+           
+
 expressions("Niederer et al 2006")
 Ca_i = Conditional(Lt(time, 1), 1000*1.8433e-7, Conditional(And(Ge(time, 10), Lt(time, 15), ), 1000*(1.055*(time/1000)**3 - 0.03507*(time/1000)**2 + 0.0003992*time/1000 - 1.356e-6), Conditional(And(Ge(time, 15), Lt(time, 55), ), 1000*(0.014*(time/1000)**3 - 0.002555*(time/1000)**2 + 0.0001494*time/1000 - 1.428e-6), Conditional(And(Ge(time, 55), Lt(time, 250), ), 1000*(1.739e-5*(time/1000)**3 - 3.209e-6*(time/1000)**2 - 5.689e-6*time/1000 + 1.719e-6), Conditional(And(Ge(time, 250), Lt(time, 490), ), 1000*(0.0001321*(time/1000)**4 - 0.0002197*(time/1000)**3 + 0.0001374*(time/1000)**2 - 3.895e-5*time/1000 + 4.441e-6), 1000*1.2148e-7))))) # mmole*l**-1
 Ca_b = Ca_TRPN_Max - TRPN # mmole*l**-1
 
-expressions("Myofilaments")
-ExtensionRatio = Conditional(Gt(time, 3e5), 1, 1)
-lambda_prev = ExtensionRatio
-dExtensionRatiodt = 0 # ms**-1
-lambda_ = Conditional(And(Gt(ExtensionRatio, 0.8), Le(ExtensionRatio, 1.15), ), ExtensionRatio, Conditional(Gt(ExtensionRatio, 1.15), 1.15, 0.8))
+#expressions("Myofilaments")
+#ExtensionRatio = Conditional(Gt(time, 3e5), 1, 1)
+#lambda_prev = ExtensionRatio
+#dExtensionRatiodt = 0 # ms**-1
+#lambda_ = Conditional(And(Gt(ExtensionRatio, 0.8), Le(ExtensionRatio, 1.15), ), ExtensionRatio, Conditional(Gt(ExtensionRatio, 1.15), 1.15, 0.8))
 
 expressions("Filament overlap")
 overlap = 1 + beta_0*(lambda_ - 1)

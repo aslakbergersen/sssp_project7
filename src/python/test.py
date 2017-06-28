@@ -1,8 +1,60 @@
 import Niederer_et_al_2006 as niederer
 from scipy.integrate import odeint
+from scipy.optimize import fsolve
 import math
 import numpy as np
 import pylab
+
+def f(lambda_):
+    e11 = 0.5 * (lambda_**2 - 1)
+    e22 = 0.5 * (1/lambda_ - 1)
+    T_p = k1 * e11/(a1 - e11)**(b1) * (2 + (b1*e11)/(a1 - e11))
+    T_p += -2*k2 * e22/(a2 - e22)**(b2) * (2 + (b2*e22)/(a2 - e22))
+    T_p += T_a
+    return T_p
+
+
+T = 300
+N = 300
+dt = T/N
+step = 10
+
+global_time = np.linspace(0, T, N+1)
+lambda_prev = 1
+dldt = 0
+z_prev=0.014417937837
+Q_1_prev = 0
+Q_2_prev = 0
+Q_3_prev = 0
+TRPN_prev = 0.067593139865
+
+tenssion_index = niederer.monitor_indices("Tension")
+z_index = 0#niederer.monitor_indices("z")
+q1_index = 1#niederer.monitor_indices("Tenssion")
+q2_index = 2#niederer.monitor_indices("Tenssion")
+q3_index =  3#niederer.monitor_indices("Tenssion")
+trpn_index = 4 #niederer.monitor_indices("Tenssion")
+
+for i, t in enumerate(global_time):
+    t_local = np.linspace(t, global_time[i+1], step+1)
+    p = (niederer.init_parameter_values(lambda_=lambda_prev, dExtensionRatiodt=dldt),)
+    init = niederer.init_state_values(z=z_prev, Q_1=Q_1_prev, Q_2=Q_2_prev,
+                                      Q_3=Q_3_prev, TRPN=TRPN_prev)
+
+    # Solve
+    s = odeint(niederer.rhs, init, t_local, p)
+
+    # Get laste state
+    z_prev, Q1_prev, Q2_prev, Q3_prev, TRPN_prev = s[-1]
+
+    # Get tension
+    m = niederer.monitor(s[-1], t_local[-1], p[0])
+    T_a = m[tenssion_index]
+
+    lambda_ = fsolve(f, lambda_prev)
+    dldt = (lambda_ - lambda_prev) / dt
+    lambda_prev = lambda_
+
 
 t = np.linspace(0,100,101)
 
@@ -11,7 +63,7 @@ force_index = niederer.monitor_indices("Ca_i")
 
 init = niederer.init_state_values()
 p = (niederer.init_parameter_values(),)
-s = odeint(niederer.rhs,init,t,p)
+s = odeint(niederer.rhs, init, t, p)
 Ca_i = []
 for t_ in t:
     m = niederer.monitor(s[-1], t_, p[0])
@@ -21,8 +73,6 @@ pylab.plot(t, Ca_i)
 #pylab.semilogx(lm_, Fss)
 
 pylab.show()
-
-
 
 
 #Fmax = 0.17
