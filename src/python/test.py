@@ -25,7 +25,7 @@ k2 = 2.22
 # Time variables
 T = 300
 N = 300
-dt = T/N
+dt = 1.*T/N
 step = 10
 global_time = np.linspace(0, T, N+1)
 
@@ -36,9 +36,14 @@ dldt = 0
 tenssion_index = niederer.monitor_indices("Tension")
 lambda_solution = []
 
+l_list = []
+Ta_list = []
+t_list = []
+
 for i, t in enumerate(global_time[:-1]):
     # Set initial values
     t_local = np.linspace(t, global_time[i+1], step+1)
+    print t
     if i == 0:
         p = (niederer.init_parameter_values(), )
         init = niederer.init_state_values()
@@ -62,8 +67,14 @@ for i, t in enumerate(global_time[:-1]):
     dldt = (lambda_ - lambda_prev) / dt
     lambda_prev = lambda_
 
-    lambda_solution.append(lambda_)
+    l_list.append(lambda_)
+    Ta_list.append(T_a)
+    t_list.append(t_local[-1])
 
-
-pylab.plot(global_time[:-1], lambda_solution)
+pylab.figure(0)
+pylab.plot(l_list,Ta_list)
+pylab.figure(1)
+pylab.plot(t_list,Ta_list,label='Ta')
+pylab.figure(2)
+pylab.plot(t_list,l_list,label='lambda')
 pylab.show()
