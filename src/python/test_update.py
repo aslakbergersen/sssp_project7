@@ -5,21 +5,42 @@ import math
 import numpy as np
 import pylab
 
+
+# Mechanics model
+def dfdl(lambda_):
+
+    e11 = 0.5 * (lambda_**2 - 1)
+    e22 = 0.5 * (1/lambda_ - 1)
+    A1 = a1-e11
+    A2 = a2-e22
+    return k1*lambda_*(1./A1**b1)*( 2. + b1*e11/A1*(4. + (b1+1.)*e11/A1 ) ) + k2*(1./(lambda_**2*A2**b2) )*( 2. + b2*e22/A2*(4. + (b2+1.)*e22/A2 ) )
+
 # Mechanics model
 def f(lambda_):
-    beta_0=4.9
-    overlap = 1. + beta_0*(-1. + lambda_)
-    T_0 = T_Base*overlap
-    Q = Q_1_prev + Q_2_prev + Q_3_prev
-    a=0.35
-    Tension = ((1. + a*Q)*T_0/(1. - Q) if Q < 0 else (1. + (2. + a)*Q)*T_0/(1. + Q))
 
     e11 = 0.5 * (lambda_**2 - 1)
     e22 = 0.5 * (1/lambda_ - 1)
     T_p = k1 * e11/(a1 - e11)**(b1) * (2 + (b1*e11)/(a1 - e11))
     T_p += -2*k2 * e22/(a2 - e22)**(b2) * (2 + (b2*e22)/(a2 - e22))
-    T_p += Tension
     return T_p
+
+def newton(lambda0):
+    beta_0=4.9
+    a=0.35
+    error = 1
+    while(error > 1e-5):
+        overlap = 1. + beta_0*(-1. + lambda0)
+        T_0 = T_Base*overlap
+        Q = Q_1_prev + Q_2_prev + Q_3_prev
+        Tension = ((1. + a*Q)*T_0/(1. - Q) if Q < 0 else (1. + (2. + a)*Q)*T_0/(1. + Q))
+
+        lambda1 = lambda0 - (f(lambda0) + Tension) / dfdl(lambda0)
+        error =  abs(lambda1 - lambda0)
+        lambda0 = lambda1
+
+
+    return lambda1
+
 
 # Parameters for the machincs model
 a1 = 0.475
@@ -30,8 +51,8 @@ k1 = 2.22
 k2 = 2.22
 
 # Time variables
-T = 300
-N = 3000
+T = 20
+N = 20
 dt = 1.*T/N
 step = 10
 global_time = np.linspace(0, T, N+1)
@@ -70,7 +91,9 @@ for i, t in enumerate(global_time[:-1]):
     T_Base = m[tenssion_index]
 
     # Update solution
-    lambda_ = fsolve(f, lambda_prev)
+    #lambda_ = fsolve(f, lambda_prev)
+    lambda_ = newton(lambda_prev)
+
     dldt = (lambda_ - lambda_prev) / dt
     lambda_prev = lambda_
 
