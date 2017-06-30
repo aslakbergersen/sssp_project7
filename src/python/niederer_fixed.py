@@ -2,8 +2,10 @@ import Niederer_et_al_2006 as niederer
 from scipy.integrate import odeint
 from scipy.optimize import fsolve
 import math
+from os import path, makedirs
 import numpy as np
-import pylab
+#import pylab
+import matplotlib.pyplot as plt
 
 # Mechanics model
 def f(lambda_):
@@ -71,10 +73,30 @@ for i, t in enumerate(global_time[:-1]):
     Ta_list.append(T_a)
     t_list.append(t_local[-1])
 
-pylab.figure(0)
-pylab.plot(l_list,Ta_list)
-pylab.figure(1)
-pylab.plot(t_list,Ta_list,label='Ta')
-pylab.figure(2)
-pylab.plot(t_list,l_list,label='lambda')
-pylab.show()
+
+# Strain vs tension
+if not path.exists("plots"):
+    makedirs("plots")
+
+plt.figure(0)
+plt.plot(l_list,Ta_list)
+#plt.xlabel(r"Strain $(\lambda)$ [-]")
+#plt.ylabel("Tension [kPa]")
+#plt.savefig("plots/niederer_fixed_strain_tension.png")
+#plt.show()
+
+# Time vs Strain
+fig1 = plt.figure(1)
+plt.plot(t_list,Ta_list)
+#plt.xlabel("Time [ms]")
+#plt.ylabel(r"Strain $(\lambda)$ [-]")
+#plt.savefig("plots/niederer_fixed_strain.png")
+
+# Time vs. tension
+plt.figure(2)
+plt.plot(t_list,l_list)
+#plt.xlabel("Time [ms]")
+#plt.ylabel("Tension [kPa]")
+#plt.savefig("plots/niederer_fixed_strain.png")
+
+plt.show()

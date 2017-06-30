@@ -85,21 +85,19 @@ for i, t in enumerate(global_time[:-1]):
     # Get tension
     m = niederer.monitor(s[-1], t_local[-1], p[0])
     T_Base = m[t_base_index]
-    #tension = m[tension_index]
+    tension = m[tension_index]
 
     # Update solution
     lambda_ = fsolve(f, lambda_prev+1e-5)
     dldt = (lambda_ - lambda_prev) / dt
     lambda_prev = lambda_
 
-    beta_0 = 4.9
-    a = 0.35
-    overlap = 1. + beta_0*(-1. + lambda_)
-    T_0 = T_Base*overlap
-    Q = Q_1_prev + Q_2_prev + Q_3_prev
-    tension = ((1. + a*Q)*T_0/(1. - Q) if Q < 0 else (1. + (2. + a)*Q)*T_0/(1.
-                                                                            +
-                                                                            Q))
+    #beta_0 = 4.9
+    #a = 0.35
+    #overlap = 1. + beta_0*(-1. + lambda_)
+    #T_0 = T_Base*overlap
+    #Q = Q_1_prev + Q_2_prev + Q_3_prev
+    #tension = ((1. + a*Q)*T_0/(1. - Q) if Q < 0 else (1. + (2. + a)*Q)*T_0/(1. + Q))
 
     l_list.append(lambda_)
     Ta_list.append(tension)
