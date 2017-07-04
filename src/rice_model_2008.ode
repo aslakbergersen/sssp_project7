@@ -68,6 +68,8 @@ states("Normalised active and passive force",
        intf = ScalarParam(-4.5113452510363e-6, unit="ms"))
 
 parameters("Normalised active and passive force",
+           #SL = ScalarParam(1.89999811516093, unit="um"),
+           #dSL = 0, # Not sure about this, does it start from rest?
            SLmin = ScalarParam(1.4, unit="um"),
            SLmax = ScalarParam(2.4, unit="um"),
            kxb_normalised = ScalarParam(120, unit="mN*mm**-2"),
