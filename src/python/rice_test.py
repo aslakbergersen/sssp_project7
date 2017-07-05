@@ -59,7 +59,7 @@ def f(lambda_):
 
     return T_p
 """
-
+"""
 #Updating all state variables
 def f(lambda_):
 
@@ -94,25 +94,61 @@ def f(lambda_):
     T_p += tension*force_scale
 
     return T_p
+"""
 
 
-bff = 20
-bxx = 4
-K = 0.876
+def f(lambda_):
+    nn=1
+    for i in range(nn):
+        xXBprer = xXBprer_prev + (dt/nn)*(#0.5*dSL + \
+                                 0.5*SL0*(lambda_ - lambda_prev)/(dt/nn) + \
+                phi / dutyprer * (-fappT*xXBprer_prev + hbT*(xXBpostr_prev - \
+                                                x_0 - xXBprer_prev)))
+
+        xXBpostr = xXBpostr_prev + (dt/nn)* (#0.5*dSL + \
+                        0.5*SL0*(lambda_ - lambda_prev)/(dt/nn) + \
+                phi / dutypostr * (hfT*(xXBprer_prev + x_0 - xXBpostr_prev)))
+
+    
+
+    # Update tension
+    #Holzapfel mechanics model
+    tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
+
+    c11 = lambda_**2
+    c22 = 1./lambda_
+    I1 = c11 + 2.*c22
+    I4f = c11
+
+    T_p = (a/2.)*exp(b*(I1-3.)) + af*exp(bf*(I4f-1.)**2)*(I4f-1.)
+
+    T_p += tension*force_scale
+
+    return T_p
+
+a = 0.057
+b = 8.094
+af = 21.503
+bf = 15.819
+
+## Parameters for Usysk mechanics model
+#bff = 20
+#bxx = 4
+#K = 0.876
 
 # Parameters for the cell model
 x_0 = 0.007
 phi = 2
 SL0 = 1.89999811516
-force_scale = 200 #200
+force_scale = 2000 #200
 
-# Parameters for the machincs model
-a1 = 0.475
-a2 = 0.619
-b1 = 1.5
-b2 = 1.2
-k1 = 2.22
-k2 = 2.22
+## Parameters for the machincs model
+#a1 = 0.475
+#a2 = 0.619
+#b1 = 1.5
+#b2 = 1.2
+#k1 = 2.22
+#k2 = 2.22
 
 # Time variables
 T = 1000
@@ -198,7 +234,7 @@ for i, t in enumerate(global_time[:-1]):
     lambda_prev = lambda_
     SL_prev = lambda_*SL0
 
-    l_list.append(SL0*lambda_)
+    l_list.append(lambda_)
     Ta_list.append(tension)
     t_list.append(t_local[-1])
     dldt_list.append(dldt)
