@@ -266,7 +266,7 @@ def rhs(states, t, parameters, values=None):
     #dSL = ((visc*(SLset - SL) + intf)/massf if SL > SLmin and SL <= SLmax\
     #    else 0)
     values[1] = -active + afterload - ppforce + preload
-    values[0] = dSL
+    values[0] = 0
 
     # Expressions for the Equation for simulated calcium transient component
     beta = -math.pow(tau1/tau2, -1/(1 - tau2/tau1)) + math.pow(tau1/tau2,\

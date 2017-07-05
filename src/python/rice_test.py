@@ -8,6 +8,7 @@ import pylab
 
 # Mechanics model
 """
+#
 def f(lambda_):
     dSLdt = 0.5 * SL0 * (lambda_ - lambda_prev) / dt
 
@@ -21,7 +22,7 @@ def f(lambda_):
     # Update tension
     tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
 
-    # Mechanics model
+    # Pole-Zero Mechanics model
     e11 = 0.5 * (lambda_**2 - 1)
     e22 = 0.5 * (1/lambda_ - 1)
     T_p = k1 * e11/(a1 - e11)**(b1) * (2 + (b1*e11)/(a1 - e11))
@@ -30,19 +31,23 @@ def f(lambda_):
 
     return T_p
 """
-
+"""
 def f(lambda_):
-    xXBprer = xXBprer_prev + dt*(#0.5*dSL + \
-                                 0.5*SL0*(lambda_ - lambda_prev)/dt + \
+    nn=1
+    for i in range(nn):
+        xXBprer = xXBprer_prev + (dt/nn)*(#0.5*dSL + \
+                                 0.5*SL0*(lambda_ - lambda_prev)/(dt/nn) + \
                 phi / dutyprer * (-fappT*xXBprer_prev + hbT*(xXBpostr_prev - \
                                                 x_0 - xXBprer_prev)))
 
-    xXBpostr = xXBpostr_prev + dt* (#0.5*dSL + \
-                        0.5*SL0*(lambda_ - lambda_prev)/dt + \
+        xXBpostr = xXBpostr_prev + (dt/nn)* (#0.5*dSL + \
+                        0.5*SL0*(lambda_ - lambda_prev)/(dt/nn) + \
                 phi / dutypostr * (hfT*(xXBprer_prev + x_0 - xXBpostr_prev)))
 
+    
 
     # Update tension
+    #Usysk mechanics model
     tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
 
     e11 = 0.5 * (lambda_**2 - 1)
@@ -53,6 +58,43 @@ def f(lambda_):
     T_p += tension*force_scale
 
     return T_p
+"""
+
+#Updating all state variables
+def f(lambda_):
+
+    p = (rice.init_parameter_values(dSL=SL0*(lambda_- lambda_prev )/dt),)
+    init = rice.init_state_values(SL=SL0*lambda_,
+                                      intf=intf_prev,
+                                      TRPNCaH=TRPNCaH_prev,
+                                      TRPNCaL=TRPNCaL_prev, N=N_prev, N_NoXB=N_NoXB_prev,
+                                      P_NoXB=P_NoXB_prev, XBpostr=XBpostr_prev,
+                                      XBprer=XBprer_prev,
+                                      xXBpostr=xXBpostr_prev,
+                                      xXBprer=xXBprer_prev)
+
+    ss = odeint(rice.rhs, init, [t, t+dt], p)
+
+    SL_prev1, intf_prev1, TRPNCaH_prev1, TRPNCaL_prev1, N_prev1, N_NoXB_prev1, \
+    P_NoXB_prev1, XBpostr_prev1, XBprer_prev1, xXBpostr_prev1, xXBprer_prev1 = ss[-1]
+
+    mm = rice.monitor(s[-1], t+dt, p[0])
+    SOVFThick1 = mm[SOVFThick_index]
+    SSXBpostr1 = mm[SSXBpostr_index]
+
+    # Update tension
+    tension = SOVFThick1*(XBprer_prev1*xXBprer_prev1+XBpostr_prev1*xXBpostr_prev1) / (x_0 * SSXBpostr1)
+
+    #Usysk mechanics model
+    e11 = 0.5 * (lambda_**2 - 1)
+    e22 = 0.5 * (1/lambda_ - 1)
+    W = bff*e11**2 + bxx*(e22**2+e22**2)
+    T_p = 0.5*K*bff*(lambda_**2-1.)*exp(W)
+
+    T_p += tension*force_scale
+
+    return T_p
+
 
 bff = 20
 bxx = 4
@@ -76,14 +118,14 @@ k2 = 2.22
 T = 1000
 N = T*16 #200
 dt = 1.*T/N
-step = 10
+step = 1
 global_time = np.linspace(0, T, N+1)
 
 # Initial values of mechanics model to the cell model 
 lambda_prev = 1 #0.9663
 #lambda_ = 1
 dldt = 0 #SL0 * (lambda_ - lambda_prev) / dt
-print dldt
+
 
 SOVFThick_index = rice.monitor_indices("SOVFThick")
 SSXBpostr_index = rice.monitor_indices("SSXBpostr")
@@ -95,9 +137,13 @@ fappT_index = rice.monitor_indices("fappT")
 active_index = rice.monitor_indices("active")
 lambda_solution = []
 
+
+
 l_list = []
 Ta_list = []
 t_list = []
+dldt_list = []
+
 
 for i, t in enumerate(global_time[:-1]):
     # Set initial values
@@ -105,10 +151,15 @@ for i, t in enumerate(global_time[:-1]):
     if i % 100 == 0:
         print "Time", t, "ms"
     if i == 0:
+        lambda_prev = 1 #0.9663
+        #lambda_ = 1
+        dldt = 0 #SL0 * (lambda_ - lambda_prev) / dt
+
         p = (rice.init_parameter_values(dSL=dldt),)
         #p = (rice.init_parameter_values(), )
         init = rice.init_state_values()
     else:
+
         p = (rice.init_parameter_values(dSL=dldt),)
         init = rice.init_state_values(SL=SL_prev,
                                       intf=intf_prev,
@@ -125,6 +176,9 @@ for i, t in enumerate(global_time[:-1]):
     # Get last state
     SL_prev, intf_prev, TRPNCaH_prev, TRPNCaL_prev, N_prev, N_NoXB_prev, \
     P_NoXB_prev, XBpostr_prev, XBprer_prev, xXBpostr_prev, xXBprer_prev = s[-1]
+
+    SL_prev1, intf_prev1, TRPNCaH_prev1, TRPNCaL_prev1, N_prev1, N_NoXB_prev1, \
+    P_NoXB_prev1, XBpostr_prev1, XBprer_prev1, xXBpostr_prev1, xXBprer_prev1 = s[-1]
 
     # Get tension
     m = rice.monitor(s[-1], t_local[-1], p[0])
@@ -144,9 +198,14 @@ for i, t in enumerate(global_time[:-1]):
     lambda_prev = lambda_
     SL_prev = lambda_*SL0
 
-    l_list.append(lambda_)
-    Ta_list.append(tension*force_scale)
+    l_list.append(SL0*lambda_)
+    Ta_list.append(tension)
     t_list.append(t_local[-1])
+    dldt_list.append(dldt)
+
+
+
+
 
 pylab.figure(0)
 pylab.plot(l_list,Ta_list)
@@ -159,6 +218,17 @@ pylab.xlabel("Time [ms]")
 pylab.figure(2)
 pylab.plot(t_list,l_list)
 pylab.ylabel("SL [$\mu m$]")
+#pylab.ylabel("lambda")
 pylab.xlabel("Time [ms]")
+#pylab.figure(3)
+#pylab.plot(t_list,dldt_list)
+#pylab.ylabel("Shortening velocity [$\mu m/s$]")
+#pylab.ylabel("lambda")
+#pylab.xlabel("Time [ms]")
+
 #pylab.ylim([0.8, 1])
+#pylab.figure(3)
+#pylab.plot(Ta_list, dldt_list)
+#pylab.xlabel("Force")
+#pylab.ylabel("velocity")
 pylab.show()
