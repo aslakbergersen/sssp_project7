@@ -234,7 +234,7 @@ for i, t in enumerate(global_time[:-1]):
     lambda_prev = lambda_
     SL_prev = lambda_*SL0
 
-    l_list.append(lambda_)
+    l_list.append(SL0*lambda_)
     Ta_list.append(tension)
     t_list.append(t_local[-1])
     dldt_list.append(dldt)
@@ -259,7 +259,7 @@ pylab.xlabel("Time [ms]")
 #pylab.figure(3)
 #pylab.plot(t_list,dldt_list)
 #pylab.ylabel("Shortening velocity [$\mu m/s$]")
-#pylab.ylabel("lambda")
+##pylab.ylabel("lambda")
 #pylab.xlabel("Time [ms]")
 
 #pylab.ylim([0.8, 1])
