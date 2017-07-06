@@ -6,63 +6,54 @@ from math import exp
 import numpy as np
 import pylab
 
-# Mechanics model
-"""
-#
-def f(lambda_):
-    dSLdt = 0.5 * SL0 * (lambda_ - lambda_prev) / dt
 
-    xXBprer = xXBprer_prev + dt*(dSLdt + \
-                phi / dutyprer * (-fappT*xXBprer_prev + hbT*(xXBpostr_prev - \
-                                                x_0 - xXBprer_prev)))
-
-    xXBpostr = xXBpostr_prev + dt*(dSLdt + \
-                phi / dutypostr * (hfT*(xXBprer_prev + x_0 - xXBpostr_prev)))
-
-    # Update tension
-    tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
-
-    # Pole-Zero Mechanics model
-    e11 = 0.5 * (lambda_**2 - 1)
-    e22 = 0.5 * (1/lambda_ - 1)
-    T_p = k1 * e11/(a1 - e11)**(b1) * (2 + (b1*e11)/(a1 - e11))
-    T_p += -2*k2 * e22/(a2 - e22)**(b2) * (2 + (b2*e22)/(a2 - e22))
-    T_p += tension*force_scale
-
-    return T_p
-"""
-"""
-def f(lambda_):
-    nn=1
-    for i in range(nn):
-        xXBprer = xXBprer_prev + (dt/nn)*(#0.5*dSL + \
-                                 0.5*SL0*(lambda_ - lambda_prev)/(dt/nn) + \
-                phi / dutyprer * (-fappT*xXBprer_prev + hbT*(xXBpostr_prev - \
-                                                x_0 - xXBprer_prev)))
-
-        xXBpostr = xXBpostr_prev + (dt/nn)* (#0.5*dSL + \
-                        0.5*SL0*(lambda_ - lambda_prev)/(dt/nn) + \
-                phi / dutypostr * (hfT*(xXBprer_prev + x_0 - xXBpostr_prev)))
-
-    
-
-    # Update tension
-    #Usysk mechanics model
-    tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
-
+def pasive_tension_usysk(lambda_):
     e11 = 0.5 * (lambda_**2 - 1)
     e22 = 0.5 * (1/lambda_ - 1)
     W = bff*e11**2 + bxx*(e22**2+e22**2)
     T_p = 0.5*K*bff*(lambda_**2-1.)*exp(W)
 
-    T_p += tension*force_scale
+    return T_p
+
+
+def pasive_tension_pole_zero(lambda_):
+    # Pole-Zero Mechanics model
+    e11 = 0.5 * (lambda_**2 - 1)
+    e22 = 0.5 * (1/lambda_ - 1)
+    T_p = k1 * e11/(a1 - e11)**(b1) * (2 + (b1*e11)/(a1 - e11))
+    T_p += -2*k2 * e22/(a2 - e22)**(b2) * (2 + (b2*e22)/(a2 - e22))
 
     return T_p
-"""
-"""
-#Updating all state variables
-def f(lambda_):
 
+
+def pasive_tension_holzapfel(lambda_):
+    #Holzapfel mechanics model
+    c11 = lambda_**2
+    c22 = 1./lambda_
+    I1 = c11 + 2.*c22
+    I4f = c11
+
+    T_p = (a/2.)*exp(b*(I1-3.)) + af*exp(bf*(I4f-1.)**2)*(I4f-1.)
+
+    return T_p
+
+
+def active_tension_FE(lambda_):
+    xXBprer = xXBprer_prev + (dt)*(#0.5*dSL + \
+                0.5*SL0*(lambda_ - lambda_prev)/(dt) + \
+                phi / dutyprer * (-fappT*xXBprer_prev + hbT*(xXBpostr_prev - \
+                x_0 - xXBprer_prev)))
+
+    xXBpostr = xXBpostr_prev + (dt)* (#0.5*dSL + \
+                0.5*SL0*(lambda_ - lambda_prev)/(dt) + \
+                phi / dutypostr * (hfT*(xXBprer_prev + x_0 - xXBpostr_prev)))
+
+    tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
+
+    return tension
+
+
+def active_tension_all(lambda_):
     p = (rice.init_parameter_values(dSL=SL0*(lambda_- lambda_prev )/dt),)
     init = rice.init_state_values(SL=SL0*lambda_,
                                       intf=intf_prev,
@@ -82,73 +73,74 @@ def f(lambda_):
     SOVFThick1 = mm[SOVFThick_index]
     SSXBpostr1 = mm[SSXBpostr_index]
 
-    # Update tension
     tension = SOVFThick1*(XBprer_prev1*xXBprer_prev1+XBpostr_prev1*xXBpostr_prev1) / (x_0 * SSXBpostr1)
 
-    #Usysk mechanics model
-    e11 = 0.5 * (lambda_**2 - 1)
-    e22 = 0.5 * (1/lambda_ - 1)
-    W = bff*e11**2 + bxx*(e22**2+e22**2)
-    T_p = 0.5*K*bff*(lambda_**2-1.)*exp(W)
+    return tension
 
-    T_p += tension*force_scale
 
-    return T_p
-"""
+def active_tension_xSL(lambda_):
+    xSL = 0.5 * SL0 * (lambda_ - 1)
+    xXB_prer = dt*phi/dutyprer*fappT*xSL + xSL
+
+
+def active_tension_GRL(lambda_):
+    tau_pre = dutyprer / (phi*(fappT + hbT))
+    tau_post = dutypostr / (phi*hfT)
+
+    xXBSS_pre = 0.5 * (lambda_ - lambda_prev)/dt * dutyprer / (phi*(fappT +
+                hbT)) + hbT/(fappT + hbT) * (xXBpostr_prev - x_0)
+    xXBSS_post = 0.5 * (lambda_ - lambda_prev)/dt * dutypostr / (phi*hfT) + xXBprer_prev
+
+    xXBprer = xXBSS_pre + (xXBSS_pre - xXBprer_prev)*exp(-dt/tau_pre)
+    xXBpostr = xXBSS_post + (xXBSS_post - xXBpostr_prev)*exp(-dt/tau_post)
+
+    tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
+
+    return tension
 
 
 def f(lambda_):
-    nn=1
-    for i in range(nn):
-        xXBprer = xXBprer_prev + (dt/nn)*(#0.5*dSL + \
-                                 0.5*SL0*(lambda_ - lambda_prev)/(dt/nn) + \
-                phi / dutyprer * (-fappT*xXBprer_prev + hbT*(xXBpostr_prev - \
-                                                x_0 - xXBprer_prev)))
-
-        xXBpostr = xXBpostr_prev + (dt/nn)* (#0.5*dSL + \
-                        0.5*SL0*(lambda_ - lambda_prev)/(dt/nn) + \
-                phi / dutypostr * (hfT*(xXBprer_prev + x_0 - xXBpostr_prev)))
-
-    
-
     # Update tension
-    #Holzapfel mechanics model
-    tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
+    #tension = active_tension_FE(lambda_)
+    #tension = active_tension_xSL(lambda_)
+    tension = active_tension_GRL(lambda_)
+    #tension = active_tension_all(lambda_)
 
-    c11 = lambda_**2
-    c22 = 1./lambda_
-    I1 = c11 + 2.*c22
-    I4f = c11
-
-    T_p = (a/2.)*exp(b*(I1-3.)) + af*exp(bf*(I4f-1.)**2)*(I4f-1.)
-
+    # Mechanics model
+    T_p = pasive_tension_holzapfel(lambda_)
+    #T_p = pasive_tension_pole_zero(lambda_)
+    #T_p = pasive_tension_usysk(lambda_)
+    print tension
     T_p += tension*force_scale
+
 
     return T_p
 
+
+# Parameters for Holzapfel mechanics model
 a = 0.057
 b = 8.094
 af = 21.503
 bf = 15.819
 
-## Parameters for Usysk mechanics model
-#bff = 20
-#bxx = 4
-#K = 0.876
+# Parameters for Usysk mechanics model
+bff = 20
+bxx = 4
+K = 0.876
+
+# Parameters for zero-pole machincs model
+a1 = 0.475
+a2 = 0.619
+b1 = 1.5
+b2 = 1.2
+k1 = 2.22
+k2 = 2.22
 
 # Parameters for the cell model
 x_0 = 0.007
 phi = 2
 SL0 = 1.89999811516
 force_scale = 2000 #200
-
-## Parameters for the machincs model
-#a1 = 0.475
-#a2 = 0.619
-#b1 = 1.5
-#b2 = 1.2
-#k1 = 2.22
-#k2 = 2.22
 
 # Time variables
 T = 1000
@@ -228,6 +220,12 @@ for i, t in enumerate(global_time[:-1]):
     #lambda_ = SL_prev / SL0
     tension = m[active_index] # Note this is force
 
+    # For the xSL method, should be commented out otherwise
+    # TODO
+    #xXBS_pre = xXBS_pre + dt*(phi / dutyprer * (-fappT*xXBS_pre) +
+    #                          hbt*(xXBS_post - x0 - xXBS_pre))
+    #xXBS_post = phi / dutypostr
+
     # Update solution
     lambda_ = fsolve(f, lambda_prev)#+1e-12)
     dldt = SL0 * (lambda_ - lambda_prev) / dt
@@ -240,22 +238,23 @@ for i, t in enumerate(global_time[:-1]):
     dldt_list.append(dldt)
 
 
-
-
-
 pylab.figure(0)
 pylab.plot(l_list,Ta_list)
 pylab.xlabel("SL [$\mu m$]")
 pylab.ylabel("Scaled normalied active force [-]")
+pylab.savefig("All_sl_force.png")
 pylab.figure(1)
 pylab.plot(t_list,Ta_list)
 pylab.ylabel("Scaled normalied active force [-]")
 pylab.xlabel("Time [ms]")
+pylab.savefig("All_force.png")
 pylab.figure(2)
 pylab.plot(t_list,l_list)
 pylab.ylabel("SL [$\mu m$]")
-#pylab.ylabel("lambda")
 pylab.xlabel("Time [ms]")
+pylab.savefig("All_sl.png")
+
+#pylab.ylabel("lambda")
 #pylab.figure(3)
 #pylab.plot(t_list,dldt_list)
 #pylab.ylabel("Shortening velocity [$\mu m/s$]")
@@ -267,4 +266,4 @@ pylab.xlabel("Time [ms]")
 #pylab.plot(Ta_list, dldt_list)
 #pylab.xlabel("Force")
 #pylab.ylabel("velocity")
-pylab.show()
+#pylab.show()
