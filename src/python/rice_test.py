@@ -84,15 +84,24 @@ def active_tension_xSL(lambda_):
 
 
 def active_tension_GRL(lambda_):
-    tau_pre = dutyprer / (phi*(fappT + hbT))
-    tau_post = dutypostr / (phi*hfT)
+    #tau_pre = dutyprer / (phi*(fappT + hbT))
+    #tau_post = dutypostr / (phi*hfT)
 
-    xXBSS_pre = 0.5 * (lambda_ - lambda_prev)/dt * dutyprer / (phi*(fappT +
-                hbT)) + hbT/(fappT + hbT) * (xXBpostr_prev - x_0)
-    xXBSS_post = 0.5 * (lambda_ - lambda_prev)/dt * dutypostr / (phi*hfT) + xXBprer_prev
+    #xXBSS_pre = 0.5 * (lambda_ - lambda_prev)/dt * dutyprer / (phi*(fappT +
+                #hbT)) + hbT/(fappT + hbT) * (xXBpostr_prev - x_0)
+    #xXBSS_post = 0.5 * (lambda_ - lambda_prev)/dt * dutypostr / (phi*hfT) + xXBprer_prev
 
-    xXBprer = xXBSS_pre + (xXBSS_pre - xXBprer_prev)*exp(-dt/tau_pre)
-    xXBpostr = xXBSS_post + (xXBSS_post - xXBpostr_prev)*exp(-dt/tau_post)
+    #xXBprer = xXBSS_pre + (xXBSS_pre - xXBprer_prev)*exp(-dt/tau_pre)
+    #xXBpostr = xXBSS_post + (xXBSS_post - xXBpostr_prev)*exp(-dt/tau_post)
+
+    a_prer = 0.5 * (lambda_ - lambda_prev)/dt + (phi/dutyprer)*(-fappT*xXBprer_prev + hbT*(xXBpostr_prev -x_0 -xXBprer_prev) )
+    a_postr = 0.5 * (lambda_ - lambda_prev)/dt + (phi/dutypostr)*( hfT*(xXBprer_prev + x_0 - xXBpostr_prev) )
+    b_prer = -phi*(fappT+hbT)/dutyprer
+    b_postr = -phi*hfT/dutypostr
+
+    xXBprer = xXBprer_prev + (a_prer/b_prer)*( exp(b_prer*dt) - 1.0 )
+    xXBpostr = xXBpostr_prev + (a_postr/b_postr)*( exp(b_postr*dt) - 1.0 )
+
 
     tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
 
@@ -110,7 +119,7 @@ def f(lambda_):
     T_p = pasive_tension_holzapfel(lambda_)
     #T_p = pasive_tension_pole_zero(lambda_)
     #T_p = pasive_tension_usysk(lambda_)
-    print tension
+    #print tension
     T_p += tension*force_scale
 
 

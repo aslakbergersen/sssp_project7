@@ -88,7 +88,7 @@ for i, t in enumerate(global_time[:-1]):
     tension = m[tension_index]
 
     # Update solution
-    lambda_ = fsolve(f, lambda_prev+1e-5)
+    lambda_ = fsolve(f, lambda_prev)
     dldt = (lambda_ - lambda_prev) / dt
     lambda_prev = lambda_
 
