@@ -19,8 +19,10 @@ def read_command_lines():
 
     # Option arguments
     parser.add_argument("-s", "--solid_model", default="holzapfel", type=str,
-                                                choices=["holzapfel", "usysk",
-                                                         "zero-pole"],
+                                                choices=["holzapfel",
+                                                         "usysk",
+                                                         "zero-pole",
+                                                         "holzapfel_viscous"],
                         help="Type of solid model.")
     parser.add_argument("-c", "--cell_model", default="rice", type=str,
                         choices=["rice"], help="Type of cell model, for now only rice is implemented")
@@ -79,6 +81,21 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
 
         return T_p
 
+    def pasive_tension_holzapfel_viscous(lambda_):
+        #Holzapfel mechanics model
+        c11 = lambda_**2
+        c22 = 1./lambda_
+        I1 = c11 + 2.*c22
+        I4f = c11
+
+        alpha_f = alpha_f_prev + ((dt/eta_f)*mu_f*0.5*log(I4f))/(1.+(dt/eta_f)*mu_f)
+        alpha_f_tmp.append(alpha_f)
+        T_v = (mu_f/I4f)*(0.5*log(I4f) - alpha_f)
+
+        T_p = (a/2.)*exp(b*(I1-3.)) + af*exp(bf*(I4f-1.)**2)*(I4f-1.)
+
+        return T_p + T_v
+
     def active_tension_FE(lambda_):
         xXBprer = xXBprer_prev + (dt)*(0.5*SL0*(lambda_ - lambda_prev)/(dt) + \
                     phi / dutyprer * (-fappT*xXBprer_prev + hbT*(xXBpostr_prev - \
@@ -117,6 +134,9 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
 
         return tension
 
+    #def active_tension_projection(lambda_):
+    #
+
     def active_tension_xSL(lambda_):
         xSL = 0.5 * SL0 * (lambda_ - 1)
         xXB_prer = dt*phi/dutyprer*fappT*xSL + xSL
@@ -142,13 +162,20 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         return T_p
 
     # Parameters for Holzapfel mechanics model
-    if solid_model == "holzapfel":
+    if "holzapfel" in solid_model:
         a = 0.057
         b = 8.094
         af = 21.503
         bf = 15.819
         force_scale = 2000
-        pasive_tension = pasive_tension_holzapfel
+        if "viscous" in solid_model:
+            alpha_f_prev = 0
+            alpha_f_tmp = []
+            mu_f = 75.382
+            eta_f = 98.157
+            pasive_tension = pasive_tension_holzapfel_viscous
+        else:
+            pasive_tension = pasive_tension_holzapfel
 
     # Parameters for Usysk mechanics model
     elif solid_model == "usysk":
@@ -245,6 +272,8 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         dldt = SL0 * (lambda_ - lambda_prev) / dt
         lambda_prev = lambda_
         SL_prev = lambda_*SL0
+        if solid_model = "holzapfel_viscous":
+            alpha_f_prev = alpha_f_tmp[-1]
 
         l_list.append(SL0*lambda_)
         Ta_list.append(tension)
@@ -271,7 +300,7 @@ def postprosess(l_list, Ta_list, t_list, dldt_list, cell_model, coupling,
     pylab.xlabel("SL [$\mu m$]", fontsize=fontsize)
     pylab.ylabel("Scaled normalied active force [-]", fontsize=fontsize)
     pylab.savefig(os.path.join(rel_path,
-                               "%s_%s_%s_dt%f_sl_force.png" \
+                               "%s_%s_%s_dt%f_sl_force.eps" \
                                % (cell_model, coupling, solid_model, dt)))
 
     pylab.figure(1)
@@ -279,7 +308,7 @@ def postprosess(l_list, Ta_list, t_list, dldt_list, cell_model, coupling,
     pylab.ylabel("Scaled normalied active force [-]", fontsize=fontsize)
     pylab.xlabel("Time [ms]", fontsize=fontsize)
     pylab.savefig(os.path.join(rel_path,
-                               "%s_%s_%s_dt%f_force.png" \
+                               "%s_%s_%s_dt%f_force.eps" \
                                % (cell_model, coupling, solid_model, dt)))
 
     pylab.figure(2)
@@ -287,7 +316,7 @@ def postprosess(l_list, Ta_list, t_list, dldt_list, cell_model, coupling,
     pylab.ylabel("SL [$\mu m$]", fontsize=fontsize)
     pylab.xlabel("Time [ms]", fontsize=fontsize)
     pylab.savefig(os.path.join(rel_path,
-                               "%s_%s_%s_dt%f_sl.png" \
+                               "%s_%s_%s_dt%f_sl.eps" \
                                % (cell_model, coupling, solid_model, dt)))
 
     pylab.figure(3)
@@ -295,7 +324,7 @@ def postprosess(l_list, Ta_list, t_list, dldt_list, cell_model, coupling,
     pylab.ylabel("Shortening velocity [$\mu m/s$]", fontsize=fontsize)
     pylab.xlabel("Time [ms]", fontsize=fontsize)
     pylab.savefig(os.path.join(rel_path,
-                                "%s_%s_%s_dt%f_sl_velocity.png" \
+                                "%s_%s_%s_dt%f_sl_velocity.eps" \
                                 % (cell_model, coupling, solid_model, dt)))
 
     pylab.figure(4)
@@ -303,7 +332,7 @@ def postprosess(l_list, Ta_list, t_list, dldt_list, cell_model, coupling,
     pylab.xlabel("Force", fontsize=fontsize)
     pylab.ylabel("Shortening velocity [$\mu m/s$]", fontsize=fontsize)
     pylab.savefig(os.path.join(rel_path,
-                                "%s_%s_%s_dt%f_sl_velocity_force.png" \
+                                "%s_%s_%s_dt%f_sl_velocity_force.eps" \
                                 % (cell_model, coupling, solid_model, dt)))
 
 
@@ -312,10 +341,12 @@ if __name__ == "__main__":
     solid_model, cell_model, N, dt, step, T, coupling = read_command_lines()
 
     # Parameters for the cell model
-    if cell_model == "rice":
+    if cell_model == "rice" and coupling != "xSL":
         import rice_model_2008_new_dir as rice
-    # TODO: For now only one cell model is implemented, but could and should be
-    # extended in the future
+    if cell_model == "rice" and coupling == "xSL"
+        # TODO: create this file
+        import rice_model_2008_xSL as rice
+
     x_0 = 0.007
     phi = 2
     SL0 = 1.89999811516
