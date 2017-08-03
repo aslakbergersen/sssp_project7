@@ -1,8 +1,7 @@
 from scipy.integrate import odeint
 from scipy.optimize import fsolve
 from argparse import ArgumentParser
-import math
-from math import exp
+from math import exp, log
 import os
 import numpy as np
 import pylab
@@ -272,7 +271,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         dldt = SL0 * (lambda_ - lambda_prev) / dt
         lambda_prev = lambda_
         SL_prev = lambda_*SL0
-        if solid_model = "holzapfel_viscous":
+        if solid_model == "holzapfel_viscous":
             alpha_f_prev = alpha_f_tmp[-1]
 
         l_list.append(SL0*lambda_)
@@ -343,7 +342,7 @@ if __name__ == "__main__":
     # Parameters for the cell model
     if cell_model == "rice" and coupling != "xSL":
         import rice_model_2008_new_dir as rice
-    if cell_model == "rice" and coupling == "xSL"
+    if cell_model == "rice" and coupling == "xSL":
         # TODO: create this file
         import rice_model_2008_xSL as rice
 
