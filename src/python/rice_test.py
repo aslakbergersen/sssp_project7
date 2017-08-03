@@ -2,9 +2,9 @@ from scipy.integrate import odeint
 from scipy.optimize import fsolve
 from argparse import ArgumentParser
 from math import exp, log
-import os
+from time import time
 import numpy as np
-import pylab
+from postprocess import *
 
 
 def read_command_lines():
@@ -31,7 +31,12 @@ def read_command_lines():
                        help="Number of time steps")
     parser.add_argument("-r", "--step", default=10, type=int, help="Number of cell solves for one solid solve")
     parser.add_argument("-C", "--coupling", default="FE", type=str,
-                        choices=["FE", "all", "xSL", "GRL"],
+                        choices=["FE",    # Sundnes et al
+                                 "all",   # Reference
+                                 "xSL",   # Sundnes et al NOT IMPLEMENTED
+                                 "GRL",   # Sundnes et al
+                                 "fixed", # Naive, not supposed to run, just for a test
+                                 "fixed_projection"], # Effort to use extrapolation as a remedy for the fixed method
                        help="Different types of couplings between the cell model and solid model, cf. Sundnes et al. 2014 for a more thourgh description.")
 
     args = parser.parse_args()
@@ -133,8 +138,21 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
 
         return tension
 
-    #def active_tension_projection(lambda_):
-    #
+
+    def active_tension_fixed(lambda_):
+        if len(Ta_list) <= 3:
+            return active_tension_all(lambda_)
+        return tension
+
+    def active_tension_fixed_projection(lambda_):
+        if len(Ta_list) <= 3:
+            return active_tension_all(lambda_)
+        else:
+            #tmp = active_tension_all(lambda_)
+            #project = 1.5 * Ta_list[-1] - 0.5 * Ta_list[-2]
+            #print "all    \t", tmp
+            #print "project\t", project
+            return 1.5 * Ta_list[-1] - 0.5 * Ta_list[-2]
 
     def active_tension_xSL(lambda_):
         xSL = 0.5 * SL0 * (lambda_ - 1)
@@ -198,13 +216,17 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
 
     if coupling == "FE":
         active_tension = active_tension_FE
-    if coupling == "xSL":
+    elif coupling == "xSL":
         # TODO: Not implemented
         active_tension = active_tension_xSL
-    if coupling == "GRL":
+    elif coupling == "GRL":
         active_tension = active_tension_GRL
-    if coupling == "all":
+    elif coupling == "all":
         active_tension = active_tension_all
+    elif coupling == "fixed":
+        active_tension = active_tension_fixed
+    elif coupling == "fixed_projection":
+        active_tension = active_tension_fixed_projection
 
     # Global time steps
     global_time = np.linspace(0, T, N+1)
@@ -219,11 +241,17 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
     active_index = rice.monitor_indices("active")
     lambda_solution = []
 
-    l_list = []
+    l_list = [0]
     Ta_list = []
-    t_list = []
-    dldt_list = []
+    Ta_list_full = []
+    t_list = [0]
+    dldt_list = [0]
+    tension_prev = 0
+    tension_prev1 = 0
+    tension_prev2 = 0
+    tension_prev3 = 0
 
+    start_time = time()
     for i, t in enumerate(global_time[:-1]):
         # Print time
         if i % 100 == 0:
@@ -245,7 +273,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
                                           xXBpostr=xXBpostr_prev,
                                           xXBprer=xXBprer_prev)
 
-        # Solve for 10 timesteps
+        # Solve for "step" number of time steps
         s = odeint(rice.rhs, init, t_local, p)
 
         # Get last state
@@ -264,7 +292,18 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         hfT = m[hfT_index]
         hbT = m[hbT_index]
         fappT = m[fappT_index]
+
+        # When are we interested in sampling tension really?
+        # The tension is changing a lot after a solid-solve. We should compare against a
+        # more accurte solution, I (Aslak) think we should store the first
+        # tension after the solid update, and not the last. The rest of the
+        # parameters are used as input for the next solve, tension is only for
+        # visualization
+        #m0 = rice.monitor(s[0], t_local[0], p[0])
         tension = m[active_index] # Note this is force
+
+        # Store solution
+        Ta_list.append(tension)
 
         # Update solution
         lambda_ = fsolve(f, lambda_prev)
@@ -274,66 +313,15 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         if solid_model == "holzapfel_viscous":
             alpha_f_prev = alpha_f_tmp[-1]
 
+        # Store solution
         l_list.append(SL0*lambda_)
-        Ta_list.append(tension)
         t_list.append(t_local[-1])
         dldt_list.append(dldt)
 
-    return l_list, Ta_list, t_list, dldt_list
+    elapsed = time() - start_time
+    Ta_list.append(m[active_index])
 
-
-def postprosess(l_list, Ta_list, t_list, dldt_list, cell_model, coupling,
-                solid_model, dt):
-    rel_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plot")
-    if not os.path.exists(rel_path):
-        os.makedirs(rel_path)
-
-    # Plot parameters
-    fontsize = 16
-    color = "k"
-    linewidth = 2
-
-    # TODO: Add a title for each plot
-    pylab.figure(0)
-    pylab.plot(l_list, Ta_list, linewidth=linewidth, color=color)
-    pylab.xlabel("SL [$\mu m$]", fontsize=fontsize)
-    pylab.ylabel("Scaled normalied active force [-]", fontsize=fontsize)
-    pylab.savefig(os.path.join(rel_path,
-                               "%s_%s_%s_dt%f_sl_force.eps" \
-                               % (cell_model, coupling, solid_model, dt)))
-
-    pylab.figure(1)
-    pylab.plot(t_list, Ta_list, linewidth=linewidth, color=color)
-    pylab.ylabel("Scaled normalied active force [-]", fontsize=fontsize)
-    pylab.xlabel("Time [ms]", fontsize=fontsize)
-    pylab.savefig(os.path.join(rel_path,
-                               "%s_%s_%s_dt%f_force.eps" \
-                               % (cell_model, coupling, solid_model, dt)))
-
-    pylab.figure(2)
-    pylab.plot(t_list, l_list, linewidth=linewidth, color=color)
-    pylab.ylabel("SL [$\mu m$]", fontsize=fontsize)
-    pylab.xlabel("Time [ms]", fontsize=fontsize)
-    pylab.savefig(os.path.join(rel_path,
-                               "%s_%s_%s_dt%f_sl.eps" \
-                               % (cell_model, coupling, solid_model, dt)))
-
-    pylab.figure(3)
-    pylab.plot(t_list, dldt_list, linewidth=linewidth, color=color)
-    pylab.ylabel("Shortening velocity [$\mu m/s$]", fontsize=fontsize)
-    pylab.xlabel("Time [ms]", fontsize=fontsize)
-    pylab.savefig(os.path.join(rel_path,
-                                "%s_%s_%s_dt%f_sl_velocity.eps" \
-                                % (cell_model, coupling, solid_model, dt)))
-
-    pylab.figure(4)
-    pylab.plot(Ta_list, dldt_list, linewidth=linewidth, color=color)
-    pylab.xlabel("Force", fontsize=fontsize)
-    pylab.ylabel("Shortening velocity [$\mu m/s$]", fontsize=fontsize)
-    pylab.savefig(os.path.join(rel_path,
-                                "%s_%s_%s_dt%f_sl_velocity_force.eps" \
-                                % (cell_model, coupling, solid_model, dt)))
-
+    return l_list, Ta_list, t_list, dldt_list, elapsed
 
 
 if __name__ == "__main__":
@@ -343,6 +331,7 @@ if __name__ == "__main__":
     if cell_model == "rice" and coupling != "xSL":
         import rice_model_2008_new_dir as rice
     if cell_model == "rice" and coupling == "xSL":
+        raise RuntimeError("Not implemented")
         # TODO: create this file
         import rice_model_2008_xSL as rice
 
@@ -355,7 +344,13 @@ if __name__ == "__main__":
         N = int(T/dt)
 
     # Run the program
-    l_list, Ta_list, t_list, dldt_list = main(T, N, dt, step, solid_model, coupling)
+    l_list, Ta_list, t_list, dldt_list, elapsed = main(T, N, dt, step, solid_model, coupling)
+
+    print "Run time in seconds", elapsed
+    print "TODO: automatic compute Error", 0
+    # TODO: Store all parameters in a file for reproducebility
+    # dt, T, step, coupling, solid, cell_model, etc.
+    # Number of newton iterations for each time step
 
     # Post prosess
     postprosess(l_list, Ta_list, t_list, dldt_list, cell_model,
