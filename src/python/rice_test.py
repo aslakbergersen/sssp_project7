@@ -3,7 +3,7 @@ from scipy.optimize import fsolve
 from argparse import ArgumentParser
 from math import exp, log
 from time import time
-#import numpy as np
+import sys
 from postprocess import *
 
 
@@ -29,6 +29,7 @@ def read_command_lines():
     parser.add_argument("-T", "--time", default=1000, type=float, help="End time in [ms]")
     parser.add_argument("-N", "--number_of_timesteps", default=None, type=int,
                        help="Number of time steps")
+    parser.add_argument("--no_verbose", default=None, type=bool, help="Print less")
     parser.add_argument("-r", "--step", default=10, type=int, help="Number of cell solves for one solid solve")
     parser.add_argument("-C", "--coupling", default="FE", type=str,
                         choices=["FE",    # Sundnes et al
@@ -40,13 +41,19 @@ def read_command_lines():
                        help="Different types of couplings between the cell model and solid model, cf. Sundnes et al. 2014 for a more thourgh description.")
 
     args = parser.parse_args()
+
+    if args.no_verbose is not None:
+        verbose = False
+    else:
+        verbose = True
+
     if args.number_of_timesteps is not None:
         dt = args.time/float(args.number_of_timesteps)
     else:
         dt = args.dt
 
     return args.solid_model, args.cell_model, args.number_of_timesteps, dt, \
-            args.step, args.time, args.coupling
+            args.step, args.time, args.coupling, verbose
 
 
 def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
@@ -339,7 +346,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
 
 
 if __name__ == "__main__":
-    solid_model, cell_model, N, dt, step, T, coupling = read_command_lines()
+    solid_model, cell_model, N, dt, step, T, coupling, verbose = read_command_lines()
 
     # Parameters for the cell model
     if cell_model == "rice" and coupling != "xSL":
@@ -358,24 +365,53 @@ if __name__ == "__main__":
         N = int(T/dt)
 
     # Run the program
-    l_list, Ta_list, t_list, dldt_list, number_of_newton, elapsed = main(T, N, dt, step, solid_model, coupling)
+    l_list, Ta_list, t_list, dldt_list, \
+        number_of_newton, elapsed = main(T, N, dt, step, solid_model, coupling)
 
-    print "Run time in seconds", elapsed
-    #if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "reference")):
-    #    os.system("wget ")
-    #compute_error(l_list, Ta_list, t_list, dldt_list)
-    print "TODO: automatic compute Error", 0
+    if verbose:
+        print ""
+        print "/"*50
+        print "// Run time in seconds %.02f" % elapsed
+        print "// Mean number of newton iterations", np.mean(number_of_newton)
+        print "/"*50, "\n"
+
+    # Download the reference solution, if it is not there
+    rel_path = os.path.dirname(os.path.abspath(__file__))
+    if not os.path.exists(os.path.join(rel_path, "reference")):
+        try:
+            ref_path = "http://folk.uio.no/aslakwb/reference.tar"
+            a = os.system("curl %s > %s/reference.tar" % (ref_path, rel_path))
+            a += os.system("tar -xvf %s/reference.tar" % rel_path)
+            a += os.system("rm %s/reference.tar" % rel_path)
+            assert a != 0, "A system command exited uncorrectly"
+        except:
+            print("Something went wrong when downloading the refenrece" + \
+                  " solution. Please download it manually from" + \
+                  " http://folk.uio.no/aslakwb/")
+            sys.exit(0)
+
+    l_l2, l_inf, Ta_l2, Ta_inf, dldt_l2, dldt_inf = compute_error(l_list,
+                                                                  Ta_list,
+                                                                  t_list,
+                                                                  dldt_list,
+                                                                  dt,
+                                                                  verbose=verbose)
 
     # Post prosess
     parameters = dict(cell_model=cell_model,
                       dt=dt,
-                  elapsed=elapsed,
-                  coupling=coupling,
-                  solid_model=solid_model,
-                  N=N,
-                  T=T,
-                  step=step)
-                  # TODO: Add different errors
+                      elapsed=elapsed,
+                      coupling=coupling,
+                      solid_model=solid_model,
+                      N=N,
+                      T=T,
+                      step=step,
+                      l_l2=l_l2,
+                      l_inf=l_inf,
+                      Ta_l2=Ta_l2,
+                      Ta_inf=Ta_inf,
+                      dldt_l2=dldt_l2,
+                      dldt_inf=dldt_inf)
 
     run_folder = store_results(l_list, Ta_list, t_list, dldt_list, number_of_newton, parameters)
     postprosess(l_list, Ta_list, t_list, dldt_list, number_of_newton, run_folder)
