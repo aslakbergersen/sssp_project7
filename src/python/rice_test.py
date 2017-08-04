@@ -3,7 +3,7 @@ from scipy.optimize import fsolve
 from argparse import ArgumentParser
 from math import exp, log
 from time import time
-import numpy as np
+#import numpy as np
 from postprocess import *
 
 
@@ -49,9 +49,6 @@ def read_command_lines():
             args.step, args.time, args.coupling
 
 
-#FIXME: The functions are defined within the main function in order to have
-#       access to variables inside the functions. This is not an elegant
-#       solution, but a solution.
 def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
     # Other possible standard choises for lambda and dldt
     # lambda_prev = 0.9663
@@ -75,7 +72,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         return T_p
 
     def pasive_tension_holzapfel(lambda_):
-        #Holzapfel mechanics model
+        # Holzapfel mechanics model
         c11 = lambda_**2
         c22 = 1./lambda_
         I1 = c11 + 2.*c22
@@ -86,7 +83,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         return T_p
 
     def pasive_tension_holzapfel_viscous(lambda_):
-        #Holzapfel mechanics model
+        # Holzapfel mechanics model with a viscous term
         c11 = lambda_**2
         c22 = 1./lambda_
         I1 = c11 + 2.*c22
@@ -134,10 +131,10 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         SOVFThick1 = mm[SOVFThick_index]
         SSXBpostr1 = mm[SSXBpostr_index]
 
-        tension = SOVFThick1*(XBprer_prev1*xXBprer_prev1+XBpostr_prev1*xXBpostr_prev1) / (x_0 * SSXBpostr1)
+        tension = SOVFThick1*(XBprer_prev1*xXBprer_prev1+XBpostr_prev1*xXBpostr_prev1) \
+                    / (x_0 * SSXBpostr1)
 
         return tension
-
 
     def active_tension_fixed(lambda_):
         if len(Ta_list) <= 3:
@@ -159,8 +156,10 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         xXB_prer = dt*phi/dutyprer*fappT*xSL + xSL
 
     def active_tension_GRL(lambda_):
-        a_prer = 0.5 * (lambda_ - lambda_prev)/dt + (phi/dutyprer)*(-fappT*xXBprer_prev + hbT*(xXBpostr_prev -x_0 -xXBprer_prev) )
-        a_postr = 0.5 * (lambda_ - lambda_prev)/dt + (phi/dutypostr)*( hfT*(xXBprer_prev + x_0 - xXBpostr_prev) )
+        a_prer = 0.5 * (lambda_ - lambda_prev)/dt + (phi/dutyprer)*\
+                 (-fappT*xXBprer_prev + hbT*(xXBpostr_prev -x_0 -xXBprer_prev) )
+        a_postr = 0.5 * (lambda_ - lambda_prev)/dt + (phi/dutypostr)*\
+                  ( hfT*(xXBprer_prev + x_0 - xXBpostr_prev) )
         b_prer = -phi*(fappT+hbT)/dutyprer
         b_postr = -phi*hfT/dutypostr
 
@@ -172,6 +171,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         return tension
 
     def f(lambda_):
+        number_of_newton_tmp.append(lambda_)
         tension = active_tension(lambda_)
         T_p = pasive_tension(lambda_)
         T_p += tension*force_scale
@@ -246,6 +246,8 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
     Ta_list_full = []
     t_list = [0]
     dldt_list = [0]
+    number_of_newton = []
+    number_of_newton_tmp = []
     tension_prev = 0
     tension_prev1 = 0
     tension_prev2 = 0
@@ -254,8 +256,18 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
     start_time = time()
     for i, t in enumerate(global_time[:-1]):
         # Print time
-        if i % 100 == 0:
-            print "Time", t, "ms"
+        if i % 100 == 0 and i != 0:
+            seconds =  (N-i) * (time()-start_time)/i
+            if seconds < 120:
+                time_left = "estimated time left: %3.00f seconds" % seconds
+            elif 120 <= seconds < 3600:
+                minutes = seconds / 60.
+                time_left = "estimated time left: %03.02f minutes" % minutes
+            else:
+                hours = seconds / 3600.
+                time_left = "estimated time left: %03.02f hours" % hours
+
+            print "Time", t, "ms", time_left
 
         # Set initial values
         t_local = np.linspace(t, global_time[i+1], step+1)
@@ -317,11 +329,13 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         l_list.append(SL0*lambda_)
         t_list.append(t_local[-1])
         dldt_list.append(dldt)
+        number_of_newton.append(len(number_of_newton_tmp))
+        number_of_newton_tmp = []
 
     elapsed = time() - start_time
     Ta_list.append(m[active_index])
 
-    return l_list, Ta_list, t_list, dldt_list, elapsed
+    return l_list, Ta_list, t_list, dldt_list, number_of_newton, elapsed
 
 
 if __name__ == "__main__":
@@ -344,14 +358,24 @@ if __name__ == "__main__":
         N = int(T/dt)
 
     # Run the program
-    l_list, Ta_list, t_list, dldt_list, elapsed = main(T, N, dt, step, solid_model, coupling)
+    l_list, Ta_list, t_list, dldt_list, number_of_newton, elapsed = main(T, N, dt, step, solid_model, coupling)
 
     print "Run time in seconds", elapsed
+    #if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "reference")):
+    #    os.system("wget ")
+    #compute_error(l_list, Ta_list, t_list, dldt_list)
     print "TODO: automatic compute Error", 0
-    # TODO: Store all parameters in a file for reproducebility
-    # dt, T, step, coupling, solid, cell_model, etc.
-    # Number of newton iterations for each time step
 
     # Post prosess
-    postprosess(l_list, Ta_list, t_list, dldt_list, cell_model,
-                coupling, solid_model, dt)
+    parameters = dict(cell_model=cell_model,
+                      dt=dt,
+                  elapsed=elapsed,
+                  coupling=coupling,
+                  solid_model=solid_model,
+                  N=N,
+                  T=T,
+                  step=step)
+                  # TODO: Add different errors
+
+    run_folder = store_results(l_list, Ta_list, t_list, dldt_list, number_of_newton, parameters)
+    postprosess(l_list, Ta_list, t_list, dldt_list, number_of_newton, run_folder)
