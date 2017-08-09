@@ -20,19 +20,19 @@ def postprosess(l_list, Ta_list, t_list, dldt_list, number_of_newton, run_folder
     plt.figure(1)
     plt.plot(t_list, Ta_list, linewidth=linewidth, color=color)
     plt.ylabel("Scaled normalied active force [-]", fontsize=fontsize)
-    plt.xlabel("Time [ms]", fontsize=fontsize)
+    plt.xlabel("Time [s]", fontsize=fontsize)
     plt.savefig(os.path.join(run_folder, "plot", "active_force.eps"))
 
     plt.figure(2)
     plt.plot(t_list, l_list, linewidth=linewidth, color=color)
     plt.ylabel("SL [$\mu m$]", fontsize=fontsize)
-    plt.xlabel("Time [ms]", fontsize=fontsize)
+    plt.xlabel("Time [s]", fontsize=fontsize)
     plt.savefig(os.path.join(run_folder, "plot", "sarcomer_length.eps"))
 
     plt.figure(3)
     plt.plot(t_list, dldt_list, linewidth=linewidth, color=color)
     plt.ylabel("Shortening velocity [$\mu m/s$]", fontsize=fontsize)
-    plt.xlabel("Time [ms]", fontsize=fontsize)
+    plt.xlabel("Time [s]", fontsize=fontsize)
     plt.savefig(os.path.join(run_folder, "plot", "sarcomere_length_vs_velocity.eps"))
 
     plt.figure(4)
@@ -75,10 +75,10 @@ def store_results(l_list, Ta_list, t_list, dldt_list, number_of_newton, paramete
     return run_folder
 
 
-def compute_error(l_list, Ta_list, t_list, dldt_list, dt, verbose=False):
+def compute_error(l_list, Ta_list, t_list, dldt_list, dt, solid_model, verbose=False):
     # Load reference parameters
     rel_path = os.path.dirname(os.path.abspath(__file__))
-    data_path = os.path.join(rel_path, "reference", "data")
+    data_path = os.path.join(rel_path, "reference", solid_model, "data")
     ref_param_file = open(os.path.join(data_path, "params.dat"), "r")
     ref_param = cPickle.load(ref_param_file)
 
@@ -98,19 +98,23 @@ def compute_error(l_list, Ta_list, t_list, dldt_list, dt, verbose=False):
     dt_ratio = dt / ref_param["dt"]
     slice_factor = int(dt_ratio)
     if dt_ratio - slice_factor == 0:
-        assert np.sum(np.abs(ref_t[::slice_factor] - t)) < 1e-10, "The compute error is not correct"
-        l_diff = l - ref_l[::slice_factor]
-        Ta_diff = Ta - ref_Ta[::slice_factor]
-        dldt_diff = dldt - ref_dldt[::slice_factor]
+        assert np.sum(np.abs(ref_t[slice_factor-1::slice_factor] - t)) < 1e-9, "The compute error is not correct"
+        l_diff = l - ref_l[slice_factor-1::slice_factor]
+        Ta_diff = Ta - ref_Ta[slice_factor-1::slice_factor]
+        dldt_diff = dldt - ref_dldt[slice_factor-1::slice_factor]
 
     # Approximate the results with a linear interpolation
     else:
         factor = dt_ratio - slice_factor
-        comb_t = (ref_t[::slice_factor]*(1 - factor) + ref_t[::slice_factor+1])/2.
+        comb_t = (ref_t[slice_factor-1::slice_factor]*(1 - factor) +
+                  ref_t[slice_factor-1::slice_factor+1])/2.
         assert np.sum(np.abs(comb_t - t)) < 1e-10, "The compute error is not correct"
-        l_diff = l - (ref_l[::slice_factor]*(1 - factor) + ref_l[::slice_factor+1]*factor) / 2.
-        Ta_diff = Ta - (ref_Ta[::slice_factor]*(1 - factor) + ref_Ta[::slice_factor+1]*factor) / 2.
-        dldt_diff = dldt - (ref_dtdl[::slice_factor]*(1 - factor) + ref_dldt[::slice_factor+1]*factor) / 2.
+        l_diff = l - (ref_l[slice_factor-1::slice_factor]*(1 - factor) +
+                      ref_l[slice_factor-1::slice_factor+1]*factor) / 2.
+        Ta_diff = Ta - (ref_Ta[slice_factor-1::slice_factor]*(1 - factor) +
+                        ref_Ta[slice_factor-1::slice_factor+1]*factor) / 2.
+        dldt_diff = dldt - (ref_dtdl[slice_factor-1::slice_factor]*(1 - factor) +
+                            ref_dldt[slice_factor-1::slice_factor+1]*factor) / 2.
 
     l_inf = np.max(np.abs(l_diff))
     l_l2 = np.sqrt(np.sum(l_diff**2)) / l_diff.shape[0]

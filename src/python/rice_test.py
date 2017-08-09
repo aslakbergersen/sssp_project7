@@ -25,12 +25,13 @@ def read_command_lines():
                         help="Type of solid model.")
     parser.add_argument("-c", "--cell_model", default="rice", type=str,
                         choices=["rice"], help="Type of cell model, for now only rice is implemented")
-    parser.add_argument("-t", "--dt", default=1, type=float, help="Timestep size")
+    parser.add_argument("-t", "--dt", default=1, type=float, help="Timestep size in [ms]")
     parser.add_argument("-T", "--time", default=1000, type=float, help="End time in [ms]")
     parser.add_argument("-N", "--number_of_timesteps", default=None, type=int,
                        help="Number of time steps")
     parser.add_argument("--no_verbose", default=None, type=bool, help="Print less")
-    parser.add_argument("-r", "--step", default=10, type=int, help="Number of cell solves for one solid solve")
+    parser.add_argument("-r", "--step", default=10, type=int,
+                        help="Number of cell solves for one solid solve")
     parser.add_argument("-C", "--coupling", default="FE", type=str,
                         choices=["FE",    # Sundnes et al
                                  "all",   # Reference
@@ -105,19 +106,17 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         return T_p + T_v
 
     def active_tension_FE(lambda_):
-        xXBprer = xXBprer_prev + (dt)*(0.5*SL0*(lambda_ - lambda_prev)/(dt) + \
+        xXBprer = xXBprer_prev + dt*(0.5*SL0*(lambda_ - lambda_prev)/dt + \
                     phi / dutyprer * (-fappT*xXBprer_prev + hbT*(xXBpostr_prev - \
                     x_0 - xXBprer_prev)))
 
-        xXBpostr = xXBpostr_prev + (dt)* (0.5*SL0*(lambda_ - lambda_prev)/(dt) + \
+        xXBpostr = xXBpostr_prev + dt* (0.5*SL0*(lambda_ - lambda_prev)/dt + \
                     phi / dutypostr * (hfT*(xXBprer_prev + x_0 - xXBpostr_prev)))
 
         tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
 
         return tension
 
-    # TODO: There is something wrong with how the update of prev1 is implemented
-    # inside the function
     def active_tension_all(lambda_):
         p = (rice.init_parameter_values(dSL=SL0*(lambda_- lambda_prev )/dt),)
         init = rice.init_state_values(SL=SL0*lambda_,
@@ -152,10 +151,6 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         if len(Ta_list) <= 3:
             return active_tension_all(lambda_)
         else:
-            #tmp = active_tension_all(lambda_)
-            #project = 1.5 * Ta_list[-1] - 0.5 * Ta_list[-2]
-            #print "all    \t", tmp
-            #print "project\t", project
             return 1.5 * Ta_list[-1] - 0.5 * Ta_list[-2]
 
     def active_tension_xSL(lambda_):
@@ -170,8 +165,8 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         b_prer = -phi*(fappT+hbT)/dutyprer
         b_postr = -phi*hfT/dutypostr
 
-        xXBprer = xXBprer_prev + (a_prer/b_prer)*( exp(b_prer*dt) - 1.0 )
-        xXBpostr = xXBpostr_prev + (a_postr/b_postr)*( exp(b_postr*dt) - 1.0 )
+        xXBprer = xXBprer_prev + (a_prer/b_prer)*(exp(b_prer*dt) - 1.0)
+        xXBpostr = xXBpostr_prev + (a_postr/b_postr)*(exp(b_postr*dt) - 1.0)
 
         tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
 
@@ -191,7 +186,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         b = 8.094
         af = 21.503
         bf = 15.819
-        force_scale = 2000
+        force_scale = 2000000
         if "viscous" in solid_model:
             alpha_f_prev = 0
             alpha_f_tmp = []
@@ -248,11 +243,11 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
     active_index = rice.monitor_indices("active")
     lambda_solution = []
 
-    l_list = [0]
+    l_list = []
     Ta_list = []
     Ta_list_full = []
-    t_list = [0]
-    dldt_list = [0]
+    t_list = []
+    dldt_list = []
     number_of_newton = []
     number_of_newton_tmp = []
     tension_prev = 0
@@ -293,7 +288,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
                                           xXBprer=xXBprer_prev)
 
         # Solve for "step" number of time steps
-        s = odeint(rice.rhs, init, t_local, p)
+        s = odeint(rice.rhs, init, t_local, p) #, mxstep=10, mxordn=4, mxords=4)
 
         # Get last state
         SL_prev, intf_prev, TRPNCaH_prev, TRPNCaL_prev, N_prev, N_NoXB_prev, \
@@ -311,14 +306,6 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         hfT = m[hfT_index]
         hbT = m[hbT_index]
         fappT = m[fappT_index]
-
-        # When are we interested in sampling tension really?
-        # The tension is changing a lot after a solid-solve. We should compare against a
-        # more accurte solution, I (Aslak) think we should store the first
-        # tension after the solid update, and not the last. The rest of the
-        # parameters are used as input for the next solve, tension is only for
-        # visualization
-        #m0 = rice.monitor(s[0], t_local[0], p[0])
         tension = m[active_index] # Note this is force
 
         # Store solution
@@ -340,7 +327,6 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         number_of_newton_tmp = []
 
     elapsed = time() - start_time
-    Ta_list.append(m[active_index])
 
     return l_list, Ta_list, t_list, dldt_list, number_of_newton, elapsed
 
@@ -395,6 +381,7 @@ if __name__ == "__main__":
                                                                   t_list,
                                                                   dldt_list,
                                                                   dt,
+                                                                  solid_model,
                                                                   verbose=verbose)
 
     # Post prosess
