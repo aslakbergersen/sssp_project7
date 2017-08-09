@@ -97,7 +97,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         I1 = c11 + 2.*c22
         I4f = c11
 
-        alpha_f = alpha_f_prev + ((dt/eta_f)*mu_f*0.5*log(I4f))/(1.+(dt/eta_f)*mu_f)
+        alpha_f = (alpha_f_prev + (dt/eta_f)*mu_f*0.5*log(I4f))/(1. + (dt/eta_f)*mu_f)
         alpha_f_tmp.append(alpha_f)
         T_v = (mu_f/I4f)*(0.5*log(I4f) - alpha_f)
 
