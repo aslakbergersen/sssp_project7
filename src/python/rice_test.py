@@ -363,12 +363,12 @@ if __name__ == "__main__":
 
     # Download the reference solution, if it is not there
     rel_path = os.path.dirname(os.path.abspath(__file__))
-    if not os.path.exists(os.path.join(rel_path, "reference")):
+    if not os.path.exists(os.path.join(rel_path, "reference", solid_model)):
         try:
-            ref_path = "http://folk.uio.no/aslakwb/reference.tar"
-            a = os.system("curl %s > %s/reference.tar" % (ref_path, rel_path))
-            a += os.system("tar -xvf %s/reference.tar" % rel_path)
-            a += os.system("rm %s/reference.tar" % rel_path)
+            ref_path = "http://folk.uio.no/aslakwb/%s.tar.gz" %s solid_model
+            a = os.system("curl %s > %s/reference/%s.tar.gz" % (ref_path, rel_path, solid_model))
+            a += os.system("tar -xvf %s/reference/%s.tar.gz" % (solid_model, rel_path, solid_model)
+            a += os.system("rm %s/reference/%s.tar.gz" % (rel_path, solid_model)
             assert a != 0, "A system command exited uncorrectly"
         except:
             print("Something went wrong when downloading the refenrece" + \
