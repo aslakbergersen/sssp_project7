@@ -48,7 +48,8 @@ def postprosess(l_list, Ta_list, t_list, dldt_list, number_of_newton, run_folder
     plt.savefig(os.path.join(run_folder, "plot", "newton_iteration.eps"))
 
 
-def store_results(l_list, Ta_list, t_list, dldt_list, number_of_newton, parameters):
+def store_results(l_list, Ta_list, t_list, dldt_list, number_of_newton,
+                  parameters, number_of_substeps, method_type, method_order):
     rel_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
     main_folder = os.path.join(rel_path, parameters["solid_model"],
                                 parameters["coupling"], str(parameters["dt"]))
@@ -60,17 +61,20 @@ def store_results(l_list, Ta_list, t_list, dldt_list, number_of_newton, paramete
         max_run = max([int(f) for f in runs if os.path.isdir(os.path.join(main_folder, f))])
         run_folder = os.path.join(main_folder, str(max_run+1))
 
-
     os.makedirs(os.path.join(run_folder, "plot"))
     os.makedirs(os.path.join(run_folder, "data"))
+    data_folder = os.path.join(run_folder, "data")
 
-    parameters_file = open(os.path.join(run_folder, "data", "params.dat"), "w")
+    parameters_file = open(os.path.join(data_folder, "params.dat"), "w")
     cPickle.dump(parameters, parameters_file)
-    np.array(l_list).dump(os.path.join(run_folder, "data", "length.np"))
-    np.array(Ta_list).dump(os.path.join(run_folder, "data", "active_force.np"))
-    np.array(t_list).dump(os.path.join(run_folder, "data", "time.np"))
-    np.array(dldt_list).dump(os.path.join(run_folder, "data", "velocity.np"))
-    np.array(number_of_newton).dump(os.path.join(run_folder, "data", "number_of_newton_iterations.np"))
+    np.array(l_list).dump(os.path.join(data_folder, "length.np"))
+    np.array(Ta_list).dump(os.path.join(data_folder, "active_force.np"))
+    np.array(t_list).dump(os.path.join(data_folder, "time.np"))
+    np.array(number_of_substeps).dump(os.path.join(data_folder, "number_of_substeps.np"))
+    np.array(method_type).dump(os.path.join(data_folder, "method_type.np"))
+    np.array(method_order).dump(os.path.join(data_folder, "method_order.np"))
+    np.array(dldt_list).dump(os.path.join(data_folder, "velocity.np"))
+    np.array(number_of_newton).dump(os.path.join(data_folder, "number_of_newton_iterations.np"))
 
     return run_folder
 

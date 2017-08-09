@@ -243,6 +243,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
     active_index = rice.monitor_indices("active")
     lambda_solution = []
 
+    # Variables to store
     l_list = []
     Ta_list = []
     Ta_list_full = []
@@ -250,10 +251,9 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
     dldt_list = []
     number_of_newton = []
     number_of_newton_tmp = []
-    tension_prev = 0
-    tension_prev1 = 0
-    tension_prev2 = 0
-    tension_prev3 = 0
+    number_of_substeps = []
+    method_type = []
+    method_order = []
 
     start_time = time()
     for i, t in enumerate(global_time[:-1]):
@@ -288,7 +288,10 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
                                           xXBprer=xXBprer_prev)
 
         # Solve for "step" number of time steps
-        s = odeint(rice.rhs, init, t_local, p) #, mxstep=10, mxordn=4, mxords=4)
+        s, solver_param = odeint(rice.rhs, init, t_local, p, full_output=True) #, mxstep=10, mxordn=4, mxords=4)
+        number_of_substeps.append(solver_param["nst"][-1])
+        method_type += solver_param["mused"].tolist()
+        method_order += solver_param["nqu"].tolist()
 
         # Get last state
         SL_prev, intf_prev, TRPNCaH_prev, TRPNCaL_prev, N_prev, N_NoXB_prev, \
@@ -328,7 +331,8 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
 
     elapsed = time() - start_time
 
-    return l_list, Ta_list, t_list, dldt_list, number_of_newton, elapsed
+    return l_list, Ta_list, t_list, dldt_list, number_of_newton, elapsed, \
+           number_of_substeps, method_type, method_order
 
 
 if __name__ == "__main__":
@@ -352,7 +356,8 @@ if __name__ == "__main__":
 
     # Run the program
     l_list, Ta_list, t_list, dldt_list, \
-        number_of_newton, elapsed = main(T, N, dt, step, solid_model, coupling)
+        number_of_newton, elapsed, number_of_substeps, method_type, \
+        method_order = main(T, N, dt, step, solid_model, coupling)
 
     if verbose:
         print ""
@@ -363,27 +368,16 @@ if __name__ == "__main__":
 
     # Download the reference solution, if it is not there
     rel_path = os.path.dirname(os.path.abspath(__file__))
+    error = True
     if not os.path.exists(os.path.join(rel_path, "reference", solid_model)):
-        try:
-            ref_path = "http://folk.uio.no/aslakwb/%s.tar.gz" % solid_model
-            a = os.system("mkdir %s" % os.path.join(rel_path, "reference"))
-            print a
-            a += os.system("curl %s > %s" % (ref_path, os.path.join(rel_path, "reference", solid_model + ".tar.gz")))
-            print a
-            a += os.system("tar -xvf %s" % (os.path.join(rel_path, "reference" solid_model + ".tar.gz")))
-            print a
-            a += os.system("mv %s %s" % (os.path.join(rel_path, solid_model), os.path.join(rel_path, reference)))
-            print a
-            a += os.system("rm %s" % os.path.join(rel_path, "reference", solid_model + ".tar.gz"))
-            print a
-            assert a != 0, "A system command exited uncorrectly"
-        except:
-            print("Something went wrong when downloading the refenrece" + \
-                  " solution. Please download it manually from" + \
-                  " http://folk.uio.no/aslakwb/")
-            sys.exit(0)
+        error = False
+        print("\nWARNING:" + \
+                " Can not compute reference solution. Please download it manually from" + \
+                " http://folk.uio.no/aslakwb/\n")
+        #sys.exit(0)
 
-    l_l2, l_inf, Ta_l2, Ta_inf, dldt_l2, dldt_inf = compute_error(l_list,
+    if error:
+        l_l2, l_inf, Ta_l2, Ta_inf, dldt_l2, dldt_inf = compute_error(l_list,
                                                                   Ta_list,
                                                                   t_list,
                                                                   dldt_list,
@@ -399,13 +393,17 @@ if __name__ == "__main__":
                       solid_model=solid_model,
                       N=N,
                       T=T,
-                      step=step,
-                      l_l2=l_l2,
-                      l_inf=l_inf,
-                      Ta_l2=Ta_l2,
-                      Ta_inf=Ta_inf,
-                      dldt_l2=dldt_l2,
-                      dldt_inf=dldt_inf)
+                      step=step)
 
-    run_folder = store_results(l_list, Ta_list, t_list, dldt_list, number_of_newton, parameters)
+    if error:
+            parameters.update(dict(l_l2=l_l2,
+                                   l_inf=l_inf,
+                                   Ta_l2=Ta_l2,
+                                   Ta_inf=Ta_inf,
+                                   dldt_l2=dldt_l2,
+                                   dldt_inf=dldt_inf))
+
+    run_folder = store_results(l_list, Ta_list, t_list, dldt_list,
+                               number_of_newton, parameters,
+                               number_of_substeps, method_type, method_order)
     postprosess(l_list, Ta_list, t_list, dldt_list, number_of_newton, run_folder)
