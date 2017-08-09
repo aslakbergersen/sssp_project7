@@ -367,10 +367,15 @@ if __name__ == "__main__":
         try:
             ref_path = "http://folk.uio.no/aslakwb/%s.tar.gz" % solid_model
             a = os.system("mkdir %s" % os.path.join(rel_path, "reference"))
-            a += os.system("curl %s > %s/reference/%s.tar.gz" % (ref_path, rel_path, solid_model))
-            a += os.system("tar -xvf %s/reference/%s.tar.gz" % (rel_path, solid_model))
-            a += os.system("mv %s %s/reference/" % (os.path.join(rel_path, solid_model), rel_path))
-            a += os.system("rm %s/reference/%s.tar.gz" % (rel_path, solid_model))
+            print a
+            a += os.system("curl %s > %s" % (ref_path, os.path.join(rel_path, "reference", solid_model + ".tar.gz")))
+            print a
+            a += os.system("tar -xvf %s" % (os.path.join(rel_path, "reference" solid_model + ".tar.gz")))
+            print a
+            a += os.system("mv %s %s" % (os.path.join(rel_path, solid_model), os.path.join(rel_path, reference)))
+            print a
+            a += os.system("rm %s" % os.path.join(rel_path, "reference", solid_model + ".tar.gz"))
+            print a
             assert a != 0, "A system command exited uncorrectly"
         except:
             print("Something went wrong when downloading the refenrece" + \
