@@ -1,6 +1,6 @@
 from scipy.integrate import odeint
 from scipy.optimize import fsolve
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentTypeError
 from math import exp, log
 from time import time
 import sys
@@ -13,15 +13,24 @@ def read_command_lines():
 
     parser = ArgumentParser(description=decription)
 
+    def restricted_float(x):
+        x = float(x)
+        if x >= 0.2 or x <= 0.4:
+            raise ArgumentTypeError("%r not in range [0.2, 0.4]"%(x,))
+        return x
+
     # Required arguments
     require = parser.add_argument_group("required named arguments")
 
     # Option arguments
     parser.add_argument("-s", "--solid_model", default="holzapfel", type=str,
                                                 choices=["holzapfel",
+                                                         "holzapfel_inc",
+                                                         "holzapfel_viscous",
                                                          "usysk",
-                                                         "zero-pole",
-                                                         "holzapfel_viscous"],
+                                                         "usysk_inc"
+                                                         "pole-zero",
+                                                         "pole-zero_inc"],
                         help="Type of solid model.")
     parser.add_argument("-c", "--cell_model", default="rice", type=str,
                         choices=["rice"], help="Type of cell model, for now only rice is implemented")
@@ -35,11 +44,14 @@ def read_command_lines():
     parser.add_argument("-C", "--coupling", default="FE", type=str,
                         choices=["FE",    # Sundnes et al
                                  "all",   # Reference
-                                 "xSL",   # Sundnes et al NOT IMPLEMENTED
+                                 "CN_adam",
+                                 "CN_FE",
                                  "GRL",   # Sundnes et al
                                  "fixed", # Naive, not supposed to run, just for a test
                                  "fixed_projection"], # Effort to use extrapolation as a remedy for the fixed method
                        help="Different types of couplings between the cell model and solid model, cf. Sundnes et al. 2014 for a more thourgh description.")
+    parser.add_argument("-f", "--transverse_factor", default=0.2, type=restricted_float,
+                        help="Transverse factor for incompresible mechanical models")
 
     args = parser.parse_args()
 
@@ -54,13 +66,24 @@ def read_command_lines():
         dt = args.dt
 
     return args.solid_model, args.cell_model, args.number_of_timesteps, dt, \
-            args.step, args.time, args.coupling, verbose
+            args.step, args.time, args.coupling, verbose, args.transverse_factor
 
 
-def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
+def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
+         pressure_prev=0):
     # Other possible standard choises for lambda and dldt
     # lambda_prev = 0.9663
     # dldt = SL0 * (lambda_ - lambda_prev) / dt
+
+    def pasive_tension_usysk_inc(lambda_):
+        e11 = 0.5 * (lambda_[0]**2 - 1)
+        e22 = 0.5 * (1/lambda_[0] - 1)
+        W = bff*e11**2 + bxx*(e22**2+e22**2)
+        T_p1 = 0.5*K*bff*(lambda_[0]**2-1.)*exp(W) + lambda_[1]/lambda_[0]**2
+        T_p2 = 0.5*K*bxx*(1./lambda_[0]-1.)*exp(W) + lambda_[1]*lambda_[0]
+
+        return [T_p1, T_p2]
+
 
     def pasive_tension_usysk(lambda_):
         e11 = 0.5 * (lambda_**2 - 1)
@@ -79,6 +102,24 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
 
         return T_p
 
+    def pasive_tension_pole_zero_inc(lambda_):
+        e11 = 0.5 * (lambda_[0]**2 - 1)
+        e22 = 0.5 * (1/lambda_[0] - 1)
+
+        T_p1 = k1 * e11/(a1 - e11)**(b1) * (2 + (b1*e11)/(a1 - e11)) + lambda_[1]/lambda_[0]**2
+        T_p2 = 2*k2 * e22/(a2 - e22)**(b2) * (2 + (b2*e22)/(a2 - e22)) + lambda_[1]*lambda_[0]
+
+        return [T_p1, T_p2]
+
+    def pasive_tension_pole_zero_inc(lambda_):
+        # Pole-Zero Mechanics model
+        e11 = 0.5 * (lambda_**2 - 1)
+        e22 = 0.5 * (1/lambda_ - 1)
+        T_p = k1 * e11/(a1 - e11)**(b1) * (2 + (b1*e11)/(a1 - e11))
+        T_p += -2*k2 * e22/(a2 - e22)**(b2) * (2 + (b2*e22)/(a2 - e22))
+
+        return T_p
+
     def pasive_tension_holzapfel(lambda_):
         # Holzapfel mechanics model
         c11 = lambda_**2
@@ -89,6 +130,18 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         T_p = (a/2.)*exp(b*(I1-3.)) + af*exp(bf*(I4f-1.)**2)*(I4f-1.)
 
         return T_p
+
+    def pasive_tension_holzapfel_inc(lambda_):
+        # Holzapfel mechanics model
+        c11 = lambda_[0]**2
+        c22 = 1./lambda_[0]
+        I1 = c11 + 2.*c22
+        I4f = c11
+
+        T_p1 = (a/2.)*exp(b*(I1-3.)) + af*exp(bf*(I4f-1.)**2)*(I4f-1.) + lambda_[1]/lambda_[0]**2
+        T_p2 = (a/2.)*exp(b*(I1-3.)) + lambda_[1]*lambda_[0]
+
+        return [T_p1, T_p2]
 
     def pasive_tension_holzapfel_viscous(lambda_):
         # Holzapfel mechanics model with a viscous term
@@ -115,6 +168,51 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
 
         tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
 
+        return tension
+
+    def active_tension_CN_adam(lambda_):
+        xXBprer = 1 / (1 + 0.5 * dt * phi/dutyprer*(1-hbT)) * \
+                   (xXBprer_prev + 0.25*SL0*(lambda_ - lambda_prev2) + \
+                   dt * phi / dutyprer * (-fappT*xXBprer_prev/2. + \
+                   hbT*((1.5*xXBpostr_prev - 0.5*xXBpostr_prev2) - \
+                   x_0 - xXBprer_prev/2.)))
+
+        xXBpostr = 1 / (1 + 0.5 * dt * phi * hbT / dutypostr) * (xXBpostr_prev + \
+                    0.25*SL0*(lambda_ - lambda_prev2) + dt*phi*hbT / dutypostr \
+                    * ((1.5*xXBprer_prev - 0.5*xXBprer_prev2) + x_0 - xXBpostr_prev/2.))
+
+        tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
+
+        return tension
+
+    def active_tension_CN_FE(lambda_):
+        # Predictor
+        xXBprer_FE = xXBprer_prev + dt*(0.5*SL0*(lambda_ - lambda_prev)/dt + \
+                    phi / dutyprer * (-fappT*xXBprer_prev + hbT*(xXBpostr_prev - \
+                    x_0 - xXBprer_prev)))
+        xXBpostr_FE = xXBpostr_prev + dt* (0.5*SL0*(lambda_ - lambda_prev)/dt + \
+                    phi / dutypostr * (hfT*(xXBprer_prev + x_0 - xXBpostr_prev)))
+
+        # CN
+        xXBprer = 1 / (1 + 0.5 * dt * phi/dutyprer*(1-hbT)) * \
+                   (xXBprer_prev + 0.25*SL0*(lambda_ - lambda_prev2) + \
+                   dt * phi / dutyprer * (-fappT*xXBprer_prev/2. + \
+                   hbT*((xXBpostr_FE + xXBpostr_prev2)/2 - \
+                   x_0 - xXBprer_prev/2.)))
+
+        xXBpostr = 1 / (1 + 0.5 * dt * phi * hbT / dutypostr) * (xXBpostr_prev + \
+                    0.25*SL0*(lambda_ - lambda_prev2) + dt*phi*hbT / dutypostr \
+                    * ((xXBprer_FE - xXBprer_prev)/2 + x_0 - xXBpostr_prev/2.))
+
+
+        tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
+
+        return tension
+
+    def active_tension_SL_extrapolation_adam(lambda_):
+        return tension
+
+    def active_tension_SL_extrapolation_curve(lambda_):
         return tension
 
     def active_tension_all(lambda_):
@@ -176,7 +274,11 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         number_of_newton_tmp.append(lambda_)
         tension = active_tension(lambda_)
         T_p = pasive_tension(lambda_)
-        T_p += tension*force_scale
+        if isinstance(T_p, list):
+            T_p[0] += tension*force_scale
+            T_p[1] += tension*force_scale*transverse_factor
+        else:
+            T_p += tension*force_scale
 
         return T_p
 
@@ -186,26 +288,31 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         b = 8.094
         af = 21.503
         bf = 15.819
-        force_scale = 2000000
+        force_scale = 2000
         if "viscous" in solid_model:
             alpha_f_prev = 0
             alpha_f_tmp = []
             mu_f = 75.382
             eta_f = 98.157
             pasive_tension = pasive_tension_holzapfel_viscous
+        elif "inc" in solid_model:
+            pasive_tension = pasive_tension_holzapfel_inc
         else:
             pasive_tension = pasive_tension_holzapfel
 
     # Parameters for Usysk mechanics model
-    elif solid_model == "usysk":
+    elif "usysk" in solid_model:
         bff = 20
         bxx = 4
         K = 0.876
-        force_scale = 200
-        pasive_tension = pasive_tension_usysk
+        force_scale = 125
+        if "inc" in solid_model:
+            pasive_tension = pasive_tension_usysk_inc
+        else:
+            pasive_tension = pasive_tension_usysk
 
-    # Parameters for zero-pole machincs model
-    elif solid_model == "zero-pole":
+    # Parameters for pole-zero machincs model
+    elif solid_model == "pole-zero":
         a1 = 0.475
         a2 = 0.619
         b1 = 1.5
@@ -213,16 +320,19 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         k1 = 2.22
         k2 = 2.22
         force_scale = 200
-        pasive_tension = pasive_tension_pole_zero
-
+        if "inc" in solid_model:
+            pasive_tension = pasice_tension_pole_zero_inc
+        else:
+            pasive_tension = pasive_tension_pole_zero
 
     if coupling == "FE":
         active_tension = active_tension_FE
-    elif coupling == "xSL":
-        # TODO: Not implemented
-        active_tension = active_tension_xSL
     elif coupling == "GRL":
         active_tension = active_tension_GRL
+    elif coupling == "CN_adam":
+        active_tension = active_tension_CN_adam
+    elif coupling == "CN_FE":
+        active_tension = active_tension_CN_FE
     elif coupling == "all":
         active_tension = active_tension_all
     elif coupling == "fixed":
@@ -249,6 +359,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
     Ta_list_full = []
     t_list = []
     dldt_list = []
+    p_list = []
     number_of_newton = []
     number_of_newton_tmp = []
     number_of_substeps = []
@@ -276,6 +387,9 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         if i == 0:
             p = (rice.init_parameter_values(dSL=dldt),)
             init = rice.init_state_values()
+            xXBprer_prev = 3.41212828972e-08
+            xXBpostr_prev = 0.00700005394874
+            lambda_prev2 = lambda_prev
         else:
             p = (rice.init_parameter_values(dSL=dldt),)
             init = rice.init_state_values(SL=SL_prev,
@@ -294,11 +408,10 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         method_order += solver_param["nqu"].tolist()
 
         # Get last state
+        xXBprer_prev2 = xXBprer_prev
+        xXBpostr_prev2 = xXBpostr_prev
         SL_prev, intf_prev, TRPNCaH_prev, TRPNCaL_prev, N_prev, N_NoXB_prev, \
         P_NoXB_prev, XBpostr_prev, XBprer_prev, xXBpostr_prev, xXBprer_prev = s[-1]
-
-        SL_prev1, intf_prev1, TRPNCaH_prev1, TRPNCaL_prev1, N_prev1, N_NoXB_prev1, \
-        P_NoXB_prev1, XBpostr_prev1, XBprer_prev1, xXBpostr_prev1, xXBprer_prev1 = s[-1]
 
         # Get tension
         m = rice.monitor(s[-1], t_local[-1], p[0])
@@ -315,9 +428,20 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
         Ta_list.append(tension)
 
         # Update solution
-        lambda_ = fsolve(f, lambda_prev)
-        dldt = SL0 * (lambda_ - lambda_prev) / dt
-        lambda_prev = lambda_
+        if solid_model.endswith("_inc"):
+            lambda_ = fsolve(f, [lambda_prev, pressure_prev])
+            dldt = SL0 * (lambda_[0] - lambda_prev) / dt
+            pressure_prev = lambda_[0]
+            lambda_prev2 = lambda_prev
+            lambda_prev = lambda_[1]
+            lambda_ = lambda_[0]
+            p_list.append(pressure_prev)
+        else:
+            lambda_ = fsolve(f, lambda_prev)
+            dldt = SL0 * (lambda_ - lambda_prev) / dt
+            lambda_prev2 = lambda_prev
+            lambda_prev = lambda_
+
         SL_prev = lambda_*SL0
         if solid_model == "holzapfel_viscous":
             alpha_f_prev = alpha_f_tmp[-1]
@@ -332,19 +456,15 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0):
     elapsed = time() - start_time
 
     return l_list, Ta_list, t_list, dldt_list, number_of_newton, elapsed, \
-           number_of_substeps, method_type, method_order
+           number_of_substeps, method_type, method_order, p_list
 
 
 if __name__ == "__main__":
-    solid_model, cell_model, N, dt, step, T, coupling, verbose = read_command_lines()
+    solid_model, cell_model, N, dt, step, T, coupling, verbose, transverse_factor = read_command_lines()
 
     # Parameters for the cell model
-    if cell_model == "rice" and coupling != "xSL":
+    if cell_model == "rice":
         import rice_model_2008_new_dir as rice
-    if cell_model == "rice" and coupling == "xSL":
-        raise RuntimeError("Not implemented")
-        # TODO: create this file
-        import rice_model_2008_xSL as rice
 
     x_0 = 0.007
     phi = 2
@@ -357,7 +477,7 @@ if __name__ == "__main__":
     # Run the program
     l_list, Ta_list, t_list, dldt_list, \
         number_of_newton, elapsed, number_of_substeps, method_type, \
-        method_order = main(T, N, dt, step, solid_model, coupling)
+        method_order, p_list = main(T, N, dt, step, solid_model, coupling)
 
     if verbose:
         print ""
@@ -374,7 +494,6 @@ if __name__ == "__main__":
         print("\nWARNING:" + \
                 " Can not compute reference solution. Please download it manually from" + \
                 " http://folk.uio.no/aslakwb/\n")
-        #sys.exit(0)
 
     if error:
         l_l2, l_inf, Ta_l2, Ta_inf, dldt_l2, dldt_inf = compute_error(l_list,
@@ -405,5 +524,6 @@ if __name__ == "__main__":
 
     run_folder = store_results(l_list, Ta_list, t_list, dldt_list,
                                number_of_newton, parameters,
-                               number_of_substeps, method_type, method_order)
+                               number_of_substeps, method_type, method_order,
+                               p_list)
     postprosess(l_list, Ta_list, t_list, dldt_list, number_of_newton, run_folder)

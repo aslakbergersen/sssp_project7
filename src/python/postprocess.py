@@ -49,7 +49,8 @@ def postprosess(l_list, Ta_list, t_list, dldt_list, number_of_newton, run_folder
 
 
 def store_results(l_list, Ta_list, t_list, dldt_list, number_of_newton,
-                  parameters, number_of_substeps, method_type, method_order):
+                  parameters, number_of_substeps, method_type, method_order,
+                  p_list):
     rel_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
     main_folder = os.path.join(rel_path, parameters["solid_model"],
                                 parameters["coupling"], str(parameters["dt"]))
@@ -74,6 +75,7 @@ def store_results(l_list, Ta_list, t_list, dldt_list, number_of_newton,
     np.array(method_type).dump(os.path.join(data_folder, "method_type.np"))
     np.array(method_order).dump(os.path.join(data_folder, "method_order.np"))
     np.array(dldt_list).dump(os.path.join(data_folder, "velocity.np"))
+    np.array(p_list).dump(os.path.join(data_folder, "pressure.np"))
     np.array(number_of_newton).dump(os.path.join(data_folder, "number_of_newton_iterations.np"))
 
     return run_folder
@@ -122,8 +124,10 @@ def compute_error(l_list, Ta_list, t_list, dldt_list, dt, solid_model, verbose=F
 
     l_inf = np.max(np.abs(l_diff))
     l_l2 = np.sqrt(np.sum(l_diff**2)) / l_diff.shape[0]
+
     Ta_inf = np.max(np.abs(Ta_diff))
     Ta_l2 = np.sqrt(np.sum(Ta_diff**2)) / Ta_diff.shape[0]
+
     dldt_inf = np.max(np.abs(dldt_diff))
     dldt_l2 = np.sqrt(np.sum(dldt_diff**2)) / dldt_diff.shape[0]
 
