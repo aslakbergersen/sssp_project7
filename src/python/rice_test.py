@@ -386,7 +386,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
             print "Time", t, "ms", time_left
 
         # Set initial values
-        t_local = np.linspace(t, global_time[i+1], step/cell_model_step+1)
+        t_local = np.linspace(t, global_time[i+1], step+1)
         if i == 0:
             p = (rice.init_parameter_values(dSL=dldt),)
             init = rice.init_state_values()
