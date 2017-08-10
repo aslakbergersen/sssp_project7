@@ -28,7 +28,7 @@ def read_command_lines():
                                                          "holzapfel_inc",
                                                          "holzapfel_viscous",
                                                          "usysk",
-                                                         "usysk_inc"
+                                                         "usysk_inc",
                                                          "pole-zero",
                                                          "pole-zero_inc"],
                         help="Type of solid model.")
@@ -110,15 +110,6 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
         T_p2 = 2*k2 * e22/(a2 - e22)**(b2) * (2 + (b2*e22)/(a2 - e22)) + lambda_[1]*lambda_[0]
 
         return [T_p1, T_p2]
-
-    def pasive_tension_pole_zero_inc(lambda_):
-        # Pole-Zero Mechanics model
-        e11 = 0.5 * (lambda_**2 - 1)
-        e22 = 0.5 * (1/lambda_ - 1)
-        T_p = k1 * e11/(a1 - e11)**(b1) * (2 + (b1*e11)/(a1 - e11))
-        T_p += -2*k2 * e22/(a2 - e22)**(b2) * (2 + (b2*e22)/(a2 - e22))
-
-        return T_p
 
     def pasive_tension_holzapfel(lambda_):
         # Holzapfel mechanics model
@@ -291,7 +282,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
         b = 8.094
         af = 21.503
         bf = 15.819
-        force_scale = 2000
+        force_scale = 200
         if "viscous" in solid_model:
             alpha_f_prev = 0
             alpha_f_tmp = []
@@ -315,7 +306,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
             pasive_tension = pasive_tension_usysk
 
     # Parameters for pole-zero machincs model
-    elif solid_model == "pole-zero":
+    elif "pole-zero" in solid_model:
         a1 = 0.475
         a2 = 0.619
         b1 = 1.5
@@ -324,7 +315,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
         k2 = 2.22
         force_scale = 200
         if "inc" in solid_model:
-            pasive_tension = pasice_tension_pole_zero_inc
+            pasive_tension = pasive_tension_pole_zero_inc
         else:
             pasive_tension = pasive_tension_pole_zero
 
