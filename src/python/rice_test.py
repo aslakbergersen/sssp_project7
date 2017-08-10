@@ -171,7 +171,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
         return tension
 
     def active_tension_CN_adam(lambda_):
-        xXBprer = 1 / (1 + 0.5 * dt * phi/dutyprer*(1-hbT)) * \
+        xXBprer = 1 / (1 + 0.5 * dt * phi * fappT/dutyprer*(1-hbT)) * \
                    (xXBprer_prev + 0.25*SL0*(lambda_ - lambda_prev2) + \
                    dt * phi / dutyprer * (-fappT*xXBprer_prev/2. + \
                    hbT*((1.5*xXBpostr_prev - 0.5*xXBpostr_prev2) - \
@@ -190,7 +190,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
         xXBprer_FE = xXBprer_prev + dt*(0.5*SL0*(lambda_ - lambda_prev)/dt + \
                     phi / dutyprer * (-fappT*xXBprer_prev + hbT*(xXBpostr_prev - \
                     x_0 - xXBprer_prev)))
-        xXBpostr_FE = xXBpostr_prev + dt* (0.5*SL0*(lambda_ - lambda_prev)/dt + \
+        xXBpostr_FE = xXBpostr_prev + dt*(0.5*SL0*(lambda_ - lambda_prev)/dt + \
                     phi / dutypostr * (hfT*(xXBprer_prev + x_0 - xXBpostr_prev)))
 
         # CN
@@ -271,13 +271,16 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
         return tension
 
     def f(lambda_):
-        number_of_newton_tmp.append(lambda_)
-        tension = active_tension(lambda_)
-        T_p = pasive_tension(lambda_)
-        if isinstance(T_p, list):
+        if lambda_.shape[0] > 1:
+            number_of_newton_tmp.append(lambda_)
+            tension = active_tension(lambda_[0])
+            T_p = pasive_tension(lambda_)
             T_p[0] += tension*force_scale
             T_p[1] += tension*force_scale*transverse_factor
         else:
+            number_of_newton_tmp.append(lambda_)
+            tension = active_tension(lambda_)
+            T_p = pasive_tension(lambda_)
             T_p += tension*force_scale
 
         return T_p
@@ -383,7 +386,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
             print "Time", t, "ms", time_left
 
         # Set initial values
-        t_local = np.linspace(t, global_time[i+1], step+1)
+        t_local = np.linspace(t, global_time[i+1], step/cell_model_step+1)
         if i == 0:
             p = (rice.init_parameter_values(dSL=dldt),)
             init = rice.init_state_values()
@@ -431,9 +434,9 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
         if solid_model.endswith("_inc"):
             lambda_ = fsolve(f, [lambda_prev, pressure_prev])
             dldt = SL0 * (lambda_[0] - lambda_prev) / dt
-            pressure_prev = lambda_[0]
+            pressure_prev = lambda_[1]
             lambda_prev2 = lambda_prev
-            lambda_prev = lambda_[1]
+            lambda_prev = lambda_[0]
             lambda_ = lambda_[0]
             p_list.append(pressure_prev)
         else:
