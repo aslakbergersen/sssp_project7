@@ -306,11 +306,11 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
             alpha_f_prev = 0
             alpha_f_tmp = []
             mu_f = 75.382
-            eta_f = 98.157*10
+            eta_f = 98.157
             alpha_s_prev = 0
             alpha_s_tmp = []
             mu_s = 18.874
-            eta_s = 59.15*10
+            eta_s = 59.15
             pasive_tension = pasive_tension_holzapfel_viscous_inc
         elif "inc" in solid_model:
             pasive_tension = pasive_tension_holzapfel_inc
