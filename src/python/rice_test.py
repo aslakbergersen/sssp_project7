@@ -26,7 +26,7 @@ def read_command_lines():
     parser.add_argument("-s", "--solid_model", default="holzapfel", type=str,
                                                 choices=["holzapfel",
                                                          "holzapfel_inc",
-                                                         "holzapfel_viscous",
+                                                         "holzapfel_viscous_inc",
                                                          "usysk",
                                                          "usysk_inc",
                                                          "pole-zero",
@@ -134,20 +134,39 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
 
         return [T_p1, T_p2]
 
-    def pasive_tension_holzapfel_viscous(lambda_):
+    #def pasive_tension_holzapfel_viscous(lambda_):
+    #    # Holzapfel mechanics model with a viscous term
+    #    c11 = lambda_**2
+    #    c22 = 1./lambda_
+    #    I1 = c11 + 2.*c22
+    #    I4f = c11
+
+    #    alpha_f = (alpha_f_prev + (dt/eta_f)*mu_f*0.5*log(I4f))/(1. + (dt/eta_f)*mu_f)
+    #    alpha_f_tmp.append(alpha_f)
+    #    T_v = (mu_f/I4f)*(0.5*log(I4f) - alpha_f)
+
+    #    T_p = (a/2.)*exp(b*(I1-3.)) + af*exp(bf*(I4f-1.)**2)*(I4f-1.)
+
+    #    return T_p + T_v
+
+    def pasive_tension_holzapfel_viscous_inc(lambda_):
         # Holzapfel mechanics model with a viscous term
-        c11 = lambda_**2
-        c22 = 1./lambda_
+        c11 = lambda_[0]**2
+        c22 = 1./lambda_[0]
         I1 = c11 + 2.*c22
         I4f = c11
+        I4s = c22
 
         alpha_f = (alpha_f_prev + (dt/eta_f)*mu_f*0.5*log(I4f))/(1. + (dt/eta_f)*mu_f)
         alpha_f_tmp.append(alpha_f)
-        T_v = (mu_f/I4f)*(0.5*log(I4f) - alpha_f)
+        alpha_s = (alpha_s_prev + (dt/eta_s)*mu_f*0.5*log(I4s))/(1. + (dt/eta_s)*mu_s)
+        alpha_s_tmp.append(alpha_s_prev)
+        #T_v = (mu_f/I4f)*(0.5*log(I4f) - alpha_f)
 
-        T_p = (a/2.)*exp(b*(I1-3.)) + af*exp(bf*(I4f-1.)**2)*(I4f-1.)
+        T_p1 = (a/2.)*exp(b*(I1-3.)) + af*exp(bf*(I4f-1.)**2)*(I4f-1.) + lambda_[1]/lambda_[0]**2 + (mu_f/I4f)*(0.5*log(I4f) - alpha_f)
+        T_p2 = (a/2.)*exp(b*(I1-3.)) + lambda_[1]*lambda_[0] + (mu_s/I4s)*(0.5*log(I4s) - alpha_s)
 
-        return T_p + T_v
+        return [T_p1, T_p2]
 
     def active_tension_FE(lambda_):
         xXBprer = xXBprer_prev + dt*(0.5*SL0*(lambda_ - lambda_prev)/dt + \
@@ -287,8 +306,12 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
             alpha_f_prev = 0
             alpha_f_tmp = []
             mu_f = 75.382
-            eta_f = 98.157
-            pasive_tension = pasive_tension_holzapfel_viscous
+            eta_f = 98.157*10
+            alpha_s_prev = 0
+            alpha_s_tmp = []
+            mu_s = 18.874
+            eta_s = 59.15*10
+            pasive_tension = pasive_tension_holzapfel_viscous_inc
         elif "inc" in solid_model:
             pasive_tension = pasive_tension_holzapfel_inc
         else:
@@ -437,8 +460,10 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
             lambda_prev = lambda_
 
         SL_prev = lambda_*SL0
-        if solid_model == "holzapfel_viscous":
+
+        if "viscous" in solid_model:
             alpha_f_prev = alpha_f_tmp[-1]
+            alpha_s_prev = alpha_s_tmp[-1]
 
         # Store solution
         l_list.append(SL0*lambda_)
