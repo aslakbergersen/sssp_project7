@@ -177,31 +177,31 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
         return tension
 
     def active_tension_CN_FE(lambda_):
-        if i < 3:
-            return active_tension_all(lambda_)
-        else:
-            # Predictor
-            xXBprer_FE = xXBprer_prev + dt*(0.5*SL0*(lambda_ - lambda_prev)/dt + \
-                        phi / dutyprer * (-fappT*xXBprer_prev + hbT*(xXBpostr_prev - \
-                        x_0 - xXBprer_prev)))
-            xXBpostr_FE = xXBpostr_prev + dt*(0.5*SL0*(lambda_ - lambda_prev)/dt + \
-                        phi / dutypostr * (hfT*(xXBprer_prev + x_0 - xXBpostr_prev)))
+        #if i < 3:
+        #    return active_tension_all(lambda_)
+        #else:
+        # Predictor
+        xXBprer_FE = xXBprer_prev + dt*(0.5*SL0*(lambda_ - lambda_prev)/dt + \
+                    phi / dutyprer * (-fappT*xXBprer_prev + hbT*(xXBpostr_prev - \
+                    x_0 - xXBprer_prev)))
+        xXBpostr_FE = xXBpostr_prev + dt*(0.5*SL0*(lambda_ - lambda_prev)/dt + \
+                    phi / dutypostr * (hfT*(xXBprer_prev + x_0 - xXBpostr_prev)))
 
-            # CN
-            xXBprer = 1 / (1 + 0.5 * dt * phi/dutyprer*(1-hbT)) * \
-                       (xXBprer_prev + 0.25*SL0*(3*lambda_ - 4*lambda_prev + lambda_prev2) + \
-                       dt * phi / dutyprer * (-fappT*xXBprer_prev/2. + \
-                       hbT*((xXBpostr_FE + xXBpostr_prev2)/2 - \
-                       x_0 - xXBprer_prev/2.)))
+        # CN
+        xXBprer = 1 / (1 + 0.5 * dt * phi/dutyprer*(1-hbT)) * \
+                   (xXBprer_prev + 0.25*SL0*(3*lambda_ - 4*lambda_prev + lambda_prev2) + \
+                   dt * phi / dutyprer * (-fappT*xXBprer_prev/2. + \
+                   hbT*((xXBpostr_FE + xXBpostr_prev2)/2 - \
+                   x_0 - xXBprer_prev/2.)))
 
-            xXBpostr = 1 / (1 + 0.5 * dt * phi * hbT / dutypostr) * (xXBpostr_prev + \
-                        0.25*SL0*(3*lambda_ - 4*lambda_prev + lambda_prev2) + dt*phi*hbT / dutypostr \
-                        * ((xXBprer_FE - xXBprer_prev)/2 + x_0 - xXBpostr_prev/2.))
+        xXBpostr = 1 / (1 + 0.5 * dt * phi * hbT / dutypostr) * (xXBpostr_prev + \
+                    0.25*SL0*(3*lambda_ - 4*lambda_prev + lambda_prev2) + dt*phi*hbT / dutypostr \
+                    * ((xXBprer_FE - xXBprer_prev)/2 + x_0 - xXBpostr_prev/2.))
 
 
-            tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
+        tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
 
-            return tension
+        return tension
 
     def active_tension_all(lambda_):
         p = (rice.init_parameter_values(dSL=SL0*(lambda_- lambda_prev )/dt),)
@@ -356,6 +356,7 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
     number_of_substeps = []
     method_type = []
     method_order = []
+    SL_half_prev = SL0 * lambda_prev
 
     start_time = time()
     for i, t in enumerate(global_time[:-1]):
@@ -402,13 +403,11 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
         SL_prev, intf_prev, TRPNCaH_prev, TRPNCaL_prev, N_prev, N_NoXB_prev, \
         P_NoXB_prev, XBpostr_prev, XBprer_prev, xXBpostr_prev, xXBprer_prev = s[-1]
 
-        if i < 1:
+        if i < 3:
             # Get tension
             m = rice.monitor(s[-1], t_local[-1], p[0])
             SOVFThick = m[SOVFThick_index]
             SSXBpostr = m[SSXBpostr_index]
-            xXBprer_prev2 = xXBprer_prev
-            xXBpostr_prev2 = xXBpostr_prev
             dutyprer = m[dutyprer_index]
             dutypostr = m[dutypostr_index]
             hfT = m[hfT_index]
@@ -426,16 +425,19 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
                 dldt = 0.25 * SL0 * (3*lambda_ - 4*lambda_prev + lambda_prev2) / dt
 
             SL_half = lambda_*SL0
+            SL_half_prev2 = SL_half_prev
             SL_half_prev = SL_half
-            SL_half_prev2 = lambda_prev2
+            print dldt
             if "viscous" in solid_model:
                 alpha_f_prev = alpha_f_tmp[-1]
         else:
             SL_half = SL0 * (1.5*lambda_prev - 0.5*lambda_prev2)
-            dldt =  0.5 * (4*SL_half - 3*SL_half_prev + SL_half_prev2)
+            print dldt
+            dldt =  0.5 * (4*SL_half - 3*SL_half_prev + SL_half_prev2) / dt
             SL_half_prev2 = SL_half_prev
             SL_half_prev = SL_half
-
+            if i > 10:
+                sys.exit(0)
         p = (rice.init_parameter_values(dSL=dldt),)
         init = rice.init_state_values(SL=SL_half,
                                       intf=intf_prev,

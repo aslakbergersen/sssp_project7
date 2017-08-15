@@ -182,13 +182,13 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
 
     def active_tension_CN_adam(lambda_):
         xXBprer = 1 / (1 + 0.5 * dt * phi * fappT/dutyprer*(1-hbT)) * \
-                   (xXBprer_prev + 0.25*SL0*(lambda_ - lambda_prev2) + \
+                   (xXBprer_prev + 0.25*SL0*(3*lambda_ - 4*lambda_prev + lambda_prev2) + \
                    dt * phi / dutyprer * (-fappT*xXBprer_prev/2. + \
                    hbT*((1.5*xXBpostr_prev - 0.5*xXBpostr_prev2) - \
                    x_0 - xXBprer_prev/2.)))
 
         xXBpostr = 1 / (1 + 0.5 * dt * phi * hbT / dutypostr) * (xXBpostr_prev + \
-                    0.25*SL0*(lambda_ - lambda_prev2) + dt*phi*hbT / dutypostr \
+                    0.25*SL0*(3*lambda_ - 4*lambda_prev + lambda_prev2) + dt*phi*hbT / dutypostr \
                     * ((1.5*xXBprer_prev - 0.5*xXBprer_prev2) + x_0 - xXBpostr_prev/2.))
 
         tension = SOVFThick*(XBprer_prev*xXBprer+XBpostr_prev*xXBpostr) / (x_0 * SSXBpostr)
@@ -205,13 +205,13 @@ def main(T, N, dt, step, solid_model, coupling, lambda_prev=1, dldt=0,
 
         # CN
         xXBprer = 1 / (1 + 0.5 * dt * phi/dutyprer*(1-hbT)) * \
-                   (xXBprer_prev + 0.25*SL0*(lambda_ - lambda_prev2) + \
+                   (xXBprer_prev + 0.25*SL0*(3*lambda_ - 4*lambda_prev + lambda_prev2) + \
                    dt * phi / dutyprer * (-fappT*xXBprer_prev/2. + \
                    hbT*((xXBpostr_FE + xXBpostr_prev2)/2 - \
                    x_0 - xXBprer_prev/2.)))
 
         xXBpostr = 1 / (1 + 0.5 * dt * phi * hbT / dutypostr) * (xXBpostr_prev + \
-                    0.25*SL0*(lambda_ - lambda_prev2) + dt*phi*hbT / dutypostr \
+                    0.25*SL0*(3*lambda_ - 4*lambda_prev + lambda_prev2) + dt*phi*hbT / dutypostr \
                     * ((xXBprer_FE - xXBprer_prev)/2 + x_0 - xXBpostr_prev/2.))
 
 
